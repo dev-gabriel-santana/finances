@@ -1,4 +1,6 @@
-import { useCallback } from 'react';
+import Storage from 'expo-sqlite/kv-store';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -14,11 +16,14 @@ import { BalanceChart } from '@/src/components/dashboard/BalanceChart';
 import { BalanceSummary } from '@/src/components/dashboard/BalanceSummary';
 import { TransactionList } from '@/src/components/dashboard/TransactionList';
 import { ThemeToggle } from '@/src/components/ui/ThemeToggle';
+import { CURRENT_BALANCE_STORAGE_KEY } from '@/src/constants/storageKeys';
 import { useDashboard } from '@/src/hooks/useDashboard';
 import { useAppTheme } from '@/src/theme/theme';
+import { formatCurrency } from '@/src/utils/currency';
 
 export default function DashboardScreen() {
   const { colors } = useAppTheme();
+  const [currentBalanceInCents, setCurrentBalanceInCents] = useState(0);
   const {
     summary,
     history,
@@ -28,9 +33,32 @@ export default function DashboardScreen() {
     reload,
   } = useDashboard();
 
+  const loadCurrentBalance = useCallback(async () => {
+    try {
+      const stored = await Storage.getItem(CURRENT_BALANCE_STORAGE_KEY);
+      const parsed = Number(stored ?? '0');
+
+      if (Number.isFinite(parsed) && parsed >= 0) {
+        setCurrentBalanceInCents(parsed);
+        return;
+      }
+    } catch {
+      // Keep current value when storage read fails.
+    }
+
+    setCurrentBalanceInCents(0);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadCurrentBalance();
+    }, [loadCurrentBalance]),
+  );
+
   const handleRefresh = useCallback(() => {
+    void loadCurrentBalance();
     void reload();
-  }, [reload]);
+  }, [loadCurrentBalance, reload]);
 
   if (isLoading && recentTransactions.length === 0 && history.length === 0) {
     return (
@@ -70,6 +98,13 @@ export default function DashboardScreen() {
               <Text style={[styles.heading, { color: colors.text }]}>Visão geral</Text>
             </View>
             <ThemeToggle />
+          </View>
+
+          <View style={[styles.currentBalanceCard, { backgroundColor: colors.balanceSurface, borderColor: colors.balanceBorder }]}> 
+            <Text style={[styles.currentBalanceLabel, { color: colors.textMuted }]}>SALDO ATUAL EM CONTA</Text>
+            <Text style={[styles.currentBalanceValue, { color: colors.onStrong }]}>
+              {formatCurrency(currentBalanceInCents)}
+            </Text>
           </View>
         </View>
 
@@ -116,6 +151,22 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '700',
     marginTop: 3,
+  },
+  currentBalanceCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  currentBalanceLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  currentBalanceValue: {
+    fontFamily: 'SpaceMono',
+    fontSize: 24,
+    marginTop: 4,
   },
   sectionDivider: {
     backgroundColor: '#f2f5f3',

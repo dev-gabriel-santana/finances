@@ -1,6 +1,7 @@
 import { addMonths, endOfYear, format, getMonth, parseISO, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { router, useFocusEffect } from 'expo-router';
+import Storage from 'expo-sqlite/kv-store';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
@@ -8,12 +9,14 @@ import {
   SectionList,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BarChart, type barDataItem } from 'react-native-gifted-charts';
 
 import { ThemeToggle } from '@/src/components/ui/ThemeToggle';
+import { CURRENT_BALANCE_STORAGE_KEY } from '@/src/constants/storageKeys';
 import {
   getFutureProjections,
   type FutureProjection,
@@ -24,6 +27,10 @@ import { useAppTheme } from '@/src/theme/theme';
 import { formatCurrency } from '@/src/utils/currency';
 import { formatTransactionDate } from '@/src/utils/dates';
 
+function normalizeCurrencyInput(text: string): string {
+  return text.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+}
+
 function formatPeriod(period: string): string {
   const formatted = format(parseISO(`${period}-01`), 'MMMM yyyy', { locale: ptBR });
   return formatted.charAt(0).toUpperCase() + formatted.slice(1);
@@ -33,6 +40,9 @@ export default function ProjectionsScreen() {
   const database = useDatabase();
   const { colors } = useAppTheme();
   const [months, setMonths] = useState<FutureProjectionMonth[]>([]);
+  const [currentBalanceInCents, setCurrentBalanceInCents] = useState(0);
+  const [currentBalanceInput, setCurrentBalanceInput] = useState('');
+  const [isEditingCurrentBalance, setIsEditingCurrentBalance] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const currentDate = new Date();
@@ -51,15 +61,22 @@ export default function ProjectionsScreen() {
         setIsLoading(true);
 
         try {
-          const result = await getFutureProjections(
-            database,
-            1,
-            currentDate,
-            selectedMonth,
-          );
+          const [result, storedCurrentBalance] = await Promise.all([
+            getFutureProjections(database, 1, currentDate, selectedMonth),
+            Storage.getItem(CURRENT_BALANCE_STORAGE_KEY),
+          ]);
 
           if (isActive) {
             setMonths(result);
+            const parsedCurrentBalance = Number(storedCurrentBalance ?? '0');
+
+            if (Number.isFinite(parsedCurrentBalance) && parsedCurrentBalance >= 0) {
+              setCurrentBalanceInCents(parsedCurrentBalance);
+              setCurrentBalanceInput(String(parsedCurrentBalance));
+            } else {
+              setCurrentBalanceInCents(0);
+              setCurrentBalanceInput('');
+            }
             setError(null);
           }
         } catch (cause) {
@@ -85,6 +102,31 @@ export default function ProjectionsScreen() {
     }, [database, selectedPeriod, selectedMonth]),
   );
 
+  const handleSaveCurrentBalance = async () => {
+    const nextBalanceInCents = Number(currentBalanceInput || 0);
+
+    if (!Number.isFinite(nextBalanceInCents) || nextBalanceInCents < 0) {
+      return;
+    }
+
+    setCurrentBalanceInCents(nextBalanceInCents);
+    setIsEditingCurrentBalance(false);
+
+    try {
+      await Storage.setItem(
+        CURRENT_BALANCE_STORAGE_KEY,
+        String(nextBalanceInCents),
+      );
+    } catch {
+      // Keep local state even when persistence fails.
+    }
+  };
+
+  const handleCancelCurrentBalanceEdit = () => {
+    setCurrentBalanceInput(String(currentBalanceInCents));
+    setIsEditingCurrentBalance(false);
+  };
+
   const selectedProjection = months[0];
   const totals = selectedProjection ?? {
     incomeInCents: 0,
@@ -93,6 +135,7 @@ export default function ProjectionsScreen() {
     items: [],
     period: selectedPeriod,
   };
+  const futureBalanceAfterBillsInCents = currentBalanceInCents + totals.balanceInCents;
   const chartData: barDataItem[] = [
     {
       value: totals.incomeInCents / 100,
@@ -226,41 +269,115 @@ export default function ProjectionsScreen() {
           showsVerticalScrollIndicator={false}
           stickySectionHeadersEnabled
           ListHeaderComponent={
-            months.length > 0 ? (
-              <View style={[styles.summary, { backgroundColor: colors.balanceSurface }]}>
-                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>SALDO DO MÊS</Text>
+            <View style={[styles.summary, { backgroundColor: colors.balanceSurface }]}> 
+              <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>SALDO ATUAL EM CONTA</Text>
+
+              {isEditingCurrentBalance ? (
+                <View style={styles.currentBalanceEditArea}>
+                  <TextInput
+                    keyboardType="number-pad"
+                    keyboardAppearance="default"
+                    onChangeText={(text) => setCurrentBalanceInput(normalizeCurrencyInput(text))}
+                    placeholder="R$ 0,00"
+                    placeholderTextColor={colors.textMuted}
+                    selectionColor={colors.primary}
+                    style={[
+                      styles.currentBalanceInput,
+                      {
+                        borderColor: colors.balanceBorder,
+                        color: colors.onStrong,
+                      },
+                    ]}
+                    value={
+                      Number(currentBalanceInput || 0) > 0
+                        ? formatCurrency(Number(currentBalanceInput))
+                        : ''
+                    }
+                  />
+
+                  <View style={styles.currentBalanceActions}>
+                    <Pressable
+                      onPress={handleSaveCurrentBalance}
+                      style={({ pressed }) => [
+                        styles.currentBalanceActionButton,
+                        { backgroundColor: colors.primaryStrong },
+                        pressed && styles.pressed,
+                      ]}>
+                      <Text style={[styles.currentBalanceActionText, { color: colors.onStrong }]}>Salvar</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={handleCancelCurrentBalanceEdit}
+                      style={({ pressed }) => [
+                        styles.currentBalanceActionButton,
+                        styles.currentBalanceActionSecondary,
+                        { borderColor: colors.balanceBorder },
+                        pressed && styles.pressed,
+                      ]}>
+                      <Text style={[styles.currentBalanceActionText, { color: colors.onStrong }]}>Cancelar</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : (
+                <>
+                  <Text
+                    adjustsFontSizeToFit
+                    numberOfLines={1}
+                    style={[styles.summaryBalance, { color: colors.onStrong }]}> 
+                    {formatCurrency(currentBalanceInCents)}
+                  </Text>
+                  <Pressable
+                    onPress={() => setIsEditingCurrentBalance(true)}
+                    style={({ pressed }) => [styles.editCurrentBalanceButton, pressed && styles.pressed]}>
+                    <Text style={[styles.editCurrentBalanceText, { color: colors.primary }]}>Editar saldo atual</Text>
+                  </Pressable>
+                </>
+              )}
+
+              <View style={[styles.futureBalanceBlock, { borderColor: colors.balanceBorder }]}> 
+                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>SALDO FUTURO - APOS PAGAR TUDO</Text>
                 <Text
                   adjustsFontSizeToFit
                   numberOfLines={1}
-                  style={[styles.summaryBalance, { color: colors.onStrong }]}>
-                  {formatCurrency(totals.balanceInCents)}
+                  style={[styles.futureBalanceValue, { color: colors.onStrong }]}> 
+                  {formatCurrency(futureBalanceAfterBillsInCents)}
                 </Text>
-                <View style={styles.summaryBreakdown}>
-                  <Text style={[styles.summaryMetric, { color: colors.income }]}>
-                    + {formatCurrency(totals.incomeInCents)}
-                  </Text>
-                  <Text style={[styles.summaryMetric, { color: colors.expense }]}>
-                    - {formatCurrency(totals.expenseInCents)}
-                  </Text>
-                </View>
-                <View style={[styles.chartContainer, { backgroundColor: colors.surface }]}> 
-                  <BarChart
-                    data={chartData}
-                    barWidth={46}
-                    barBorderRadius={5}
-                    height={150}
-                    noOfSections={4}
-                    spacing={42}
-                    yAxisTextStyle={[styles.axisText, { color: colors.textMuted }]}
-                    xAxisLabelTextStyle={[styles.axisLabel, { color: colors.textMuted }]}
-                    rulesColor={colors.border}
-                    yAxisColor="transparent"
-                    xAxisColor={colors.border}
-                    formatYLabel={(value) => `R$ ${value}`}
-                  />
-                </View>
+                <Text style={[styles.futureFormula, { color: colors.textMuted }]}> 
+                  {formatCurrency(currentBalanceInCents)} + {formatCurrency(totals.incomeInCents)} - {formatCurrency(totals.expenseInCents)}
+                </Text>
               </View>
-            ) : null
+
+              <Text style={[styles.summaryLabel, styles.monthSummaryLabel, { color: colors.textMuted }]}>SALDO DO MÊS</Text>
+              <Text
+                adjustsFontSizeToFit
+                numberOfLines={1}
+                style={[styles.summaryBalance, { color: colors.onStrong }]}> 
+                {formatCurrency(totals.balanceInCents)}
+              </Text>
+              <View style={styles.summaryBreakdown}>
+                <Text style={[styles.summaryMetric, { color: colors.income }]}> 
+                  + {formatCurrency(totals.incomeInCents)}
+                </Text>
+                <Text style={[styles.summaryMetric, { color: colors.expense }]}> 
+                  - {formatCurrency(totals.expenseInCents)}
+                </Text>
+              </View>
+              <View style={[styles.chartContainer, { backgroundColor: colors.surface }]}> 
+                <BarChart
+                  data={chartData}
+                  barWidth={46}
+                  barBorderRadius={5}
+                  height={150}
+                  noOfSections={4}
+                  spacing={42}
+                  yAxisTextStyle={[styles.axisText, { color: colors.textMuted }]}
+                  xAxisLabelTextStyle={[styles.axisLabel, { color: colors.textMuted }]}
+                  rulesColor={colors.border}
+                  yAxisColor="transparent"
+                  xAxisColor={colors.border}
+                  formatYLabel={(value) => `R$ ${value}`}
+                />
+              </View>
+            </View>
           }
           ListEmptyComponent={
             <View style={[styles.empty, { borderColor: colors.border }]}>
@@ -357,9 +474,67 @@ const styles = StyleSheet.create({
     gap: 20,
     marginTop: 14,
   },
+  monthSummaryLabel: {
+    marginTop: 16,
+  },
   summaryMetric: {
     fontFamily: 'SpaceMono',
     fontSize: 11,
+  },
+  currentBalanceEditArea: {
+    marginTop: 8,
+  },
+  currentBalanceInput: {
+    borderRadius: 8,
+    borderWidth: 1,
+    fontFamily: 'SpaceMono',
+    fontSize: 22,
+    height: 56,
+    paddingHorizontal: 14,
+  },
+  currentBalanceActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+  currentBalanceActionButton: {
+    alignItems: 'center',
+    borderRadius: 6,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 40,
+    paddingHorizontal: 10,
+  },
+  currentBalanceActionSecondary: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+  },
+  currentBalanceActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  editCurrentBalanceButton: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  editCurrentBalanceText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  futureBalanceBlock: {
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 16,
+    padding: 12,
+  },
+  futureBalanceValue: {
+    fontFamily: 'SpaceMono',
+    fontSize: 22,
+    marginTop: 4,
+  },
+  futureFormula: {
+    fontSize: 10,
+    marginTop: 6,
   },
   monthNavigator: {
     alignItems: 'center',

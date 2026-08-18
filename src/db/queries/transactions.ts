@@ -16,6 +16,8 @@ export type CreateTransactionInput = Omit<
 
 export type UpdateTransactionInput = Partial<CreateTransactionInput>;
 
+export type DeleteTransactionMode = 'single' | 'series';
+
 export interface ListTransactionsOptions {
   type?: TransactionType;
   limit?: number;
@@ -123,15 +125,35 @@ export async function updateTransaction(
 export async function deleteTransaction(
   database: Database,
   id: number,
+  mode: DeleteTransactionMode = 'series',
 ): Promise<void> {
-  const [deleted] = await database
-    .delete(transactions)
-    .where(eq(transactions.id, id))
-    .returning({ id: transactions.id });
+  await database.transaction(async (databaseTransaction) => {
+    const [current] = await databaseTransaction
+      .select({ id: transactions.id, recurringRuleId: transactions.recurringRuleId })
+      .from(transactions)
+      .where(eq(transactions.id, id))
+      .limit(1);
 
-  if (!deleted) {
-    throw new Error('Transaction not found');
-  }
+    if (!current) {
+      throw new Error('Transaction not found');
+    }
+
+    if (current.recurringRuleId && mode === 'series') {
+      await databaseTransaction
+        .delete(transactions)
+        .where(eq(transactions.recurringRuleId, current.recurringRuleId));
+
+      await databaseTransaction
+        .delete(recurringExpenseRules)
+        .where(eq(recurringExpenseRules.id, current.recurringRuleId));
+
+      return;
+    }
+
+    await databaseTransaction
+      .delete(transactions)
+      .where(eq(transactions.id, id));
+  });
 }
 
 export async function clearAllTransactions(database: Database): Promise<void> {

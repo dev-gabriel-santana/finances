@@ -74,11 +74,11 @@ export default function TransactionDetailScreen() {
 
   const isIncome = transaction.type === 'income';
 
-  const handleDelete = async () => {
+  const handleDelete = async (mode: 'single' | 'series' = 'series') => {
     setIsDeleting(true);
 
     try {
-      await deleteTransaction(database, transaction.id);
+      await deleteTransaction(database, transaction.id, mode);
       router.replace('/(tabs)/transactions');
     } catch {
       setIsDeleting(false);
@@ -90,6 +90,30 @@ export default function TransactionDetailScreen() {
   };
 
   const confirmDelete = () => {
+    const isRecurring = Boolean(transaction.recurringRuleId);
+
+    if (isRecurring) {
+      Alert.alert(
+        'Excluir lançamento recorrente?',
+        'Escolha se deseja remover apenas este mês ou toda a série recorrente.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Só este mês',
+            style: 'destructive',
+            onPress: () => void handleDelete('single'),
+          },
+          {
+            text: 'Toda a série',
+            style: 'destructive',
+            onPress: () => void handleDelete('series'),
+          },
+        ],
+      );
+
+      return;
+    }
+
     Alert.alert(
       'Excluir lançamento?',
       'Esta ação é permanente e não poderá ser desfeita.',
@@ -98,7 +122,7 @@ export default function TransactionDetailScreen() {
         {
           text: 'Excluir',
           style: 'destructive',
-          onPress: () => void handleDelete(),
+          onPress: () => void handleDelete('single'),
         },
       ],
     );
