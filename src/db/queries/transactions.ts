@@ -1,0 +1,202 @@
+import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
+
+import type { Database } from '../client';
+import {
+  recurringExpenseRules,
+  transactions,
+  type NewTransaction,
+  type Transaction,
+  type TransactionType,
+} from '../schema';
+
+export type CreateTransactionInput = Omit<
+  NewTransaction,
+  'id' | 'createdAt' | 'updatedAt'
+>;
+
+export type UpdateTransactionInput = Partial<CreateTransactionInput>;
+
+export interface ListTransactionsOptions {
+  type?: TransactionType;
+  limit?: number;
+}
+
+export interface BalanceSummary {
+  incomeInCents: number;
+  expenseInCents: number;
+  balanceInCents: number;
+}
+
+export interface MonthlyBalance extends BalanceSummary {
+  period: string;
+}
+
+export interface BalanceHistoryOptions {
+  startDate?: string;
+  endDate?: string;
+}
+
+const incomeTotal = sql<number>`coalesce(sum(case when ${transactions.type} = 'income' then ${transactions.amountInCents} else 0 end), 0)`;
+const expenseTotal = sql<number>`coalesce(sum(case when ${transactions.type} = 'expense' then ${transactions.amountInCents} else 0 end), 0)`;
+const balanceTotal = sql<number>`coalesce(sum(case when ${transactions.type} = 'income' then ${transactions.amountInCents} else -${transactions.amountInCents} end), 0)`;
+
+export async function insertTransaction(
+  database: Database,
+  input: CreateTransactionInput,
+): Promise<Transaction> {
+  const now = new Date().toISOString();
+  const [created] = await database
+    .insert(transactions)
+    .values({ ...input, createdAt: now, updatedAt: now })
+    .returning();
+
+  if (!created) {
+    throw new Error('Transaction could not be created');
+  }
+
+  return created;
+}
+
+export async function getTransactionById(
+  database: Database,
+  id: number,
+): Promise<Transaction | null> {
+  const [transaction] = await database
+    .select()
+    .from(transactions)
+    .where(eq(transactions.id, id))
+    .limit(1);
+
+  return transaction ?? null;
+}
+
+export async function updateTransaction(
+  database: Database,
+  id: number,
+  input: UpdateTransactionInput,
+): Promise<Transaction> {
+  const updated = await database.transaction(async (databaseTransaction) => {
+    const [current] = await databaseTransaction
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, id))
+      .limit(1);
+
+    if (!current) {
+      throw new Error('Transaction not found');
+    }
+
+    const now = new Date().toISOString();
+    const [saved] = await databaseTransaction
+      .update(transactions)
+      .set({ ...input, updatedAt: now })
+      .where(eq(transactions.id, id))
+      .returning();
+
+    if (current.recurringRuleId) {
+      await databaseTransaction
+        .update(recurringExpenseRules)
+        .set({
+          title: input.title,
+          description: input.description,
+          amountInCents: input.amountInCents,
+          category: input.category,
+          merchant: input.merchant,
+          paymentMethod: input.paymentMethod,
+          cardId: input.cardId,
+          paymentModality: input.paymentModality,
+          updatedAt: now,
+        })
+        .where(eq(recurringExpenseRules.id, current.recurringRuleId));
+    }
+
+    return saved;
+  });
+
+  if (!updated) {
+    throw new Error('Transaction not found');
+  }
+
+  return updated;
+}
+
+export async function deleteTransaction(
+  database: Database,
+  id: number,
+): Promise<void> {
+  const [deleted] = await database
+    .delete(transactions)
+    .where(eq(transactions.id, id))
+    .returning({ id: transactions.id });
+
+  if (!deleted) {
+    throw new Error('Transaction not found');
+  }
+}
+
+export async function listTransactions(
+  database: Database,
+  options: ListTransactionsOptions = {},
+): Promise<Transaction[]> {
+  const limit = Math.max(1, options.limit ?? 100);
+
+  if (options.type) {
+    return database
+      .select()
+      .from(transactions)
+      .where(eq(transactions.type, options.type))
+      .orderBy(desc(transactions.transactionDate), desc(transactions.id))
+      .limit(limit);
+  }
+
+  return database
+    .select()
+    .from(transactions)
+    .orderBy(desc(transactions.transactionDate), desc(transactions.id))
+    .limit(limit);
+}
+
+export async function getBalanceSummary(
+  database: Database,
+): Promise<BalanceSummary> {
+  const [summary] = await database
+    .select({
+      incomeInCents: incomeTotal,
+      expenseInCents: expenseTotal,
+      balanceInCents: balanceTotal,
+    })
+    .from(transactions);
+
+  return summary ?? {
+    incomeInCents: 0,
+    expenseInCents: 0,
+    balanceInCents: 0,
+  };
+}
+
+export async function getMonthlyBalanceHistory(
+  database: Database,
+  options: BalanceHistoryOptions = {},
+): Promise<MonthlyBalance[]> {
+  const period = sql<string>`substr(${transactions.transactionDate}, 1, 7)`;
+  const filters = [
+    options.startDate
+      ? gte(transactions.transactionDate, options.startDate)
+      : undefined,
+    options.endDate
+      ? lte(transactions.transactionDate, options.endDate)
+      : undefined,
+  ].filter((filter) => filter !== undefined);
+
+  return database
+    .select({
+      period,
+      incomeInCents: incomeTotal,
+      expenseInCents: expenseTotal,
+      balanceInCents: balanceTotal,
+    })
+    .from(transactions)
+    .where(filters.length > 0 ? and(...filters) : undefined)
+    .groupBy(period)
+    .orderBy(period);
+}

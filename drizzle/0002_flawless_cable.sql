@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `transactions_recurring_occurrence_idx` ON `transactions` (`recurring_rule_id`,`transaction_date`);

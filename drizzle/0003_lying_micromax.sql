@@ -1,0 +1,1 @@
+ALTER TABLE `recurring_expense_rules` ADD `next_invoice_due_date` text;

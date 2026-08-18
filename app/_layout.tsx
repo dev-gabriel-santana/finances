@@ -1,10 +1,18 @@
 import { useFonts } from 'expo-font';
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import {
+  DarkTheme,
+  DefaultTheme,
+  Stack,
+  ThemeProvider as NavigationThemeProvider,
+} from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/components/useColorScheme';
+import { ThemeToggle } from '@/src/components/ui/ThemeToggle';
+import { DatabaseProvider } from '@/src/db/provider';
+import { AppThemeProvider, useAppTheme } from '@/src/theme/theme';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -39,18 +47,49 @@ export default function RootLayout() {
     return null;
   }
 
-  return <RootLayoutNav />;
+  return (
+    <AppThemeProvider>
+      <DatabaseProvider>
+        <RootLayoutNav />
+      </DatabaseProvider>
+    </AppThemeProvider>
+  );
 }
 
 function RootLayoutNav() {
-  const colorScheme = useColorScheme();
+  const { mode, colors } = useAppTheme();
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
+    <NavigationThemeProvider value={mode === 'dark' ? DarkTheme : DefaultTheme}>
+      <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
+      <Stack
+        screenOptions={{
+          contentStyle: { backgroundColor: colors.background },
+          headerBackTitle: 'Voltar',
+          headerRight: () => <ThemeToggle />,
+          headerStyle: { backgroundColor: colors.surface },
+          headerTintColor: colors.text,
+          headerTitleStyle: { color: colors.text },
+        }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="transactions/expense"
+          options={{ headerBackTitle: 'Voltar', title: 'Nova despesa' }}
+        />
+        <Stack.Screen
+          name="transactions/income"
+          options={{ headerBackTitle: 'Voltar', title: 'Nova receita' }}
+        />
+        <Stack.Screen
+          name="transactions/[id]"
+          options={{ title: 'Detalhes' }}
+        />
+        <Stack.Screen
+          name="transactions/[id]/edit"
+          options={{ title: 'Editar lançamento' }}
+        />
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
       </Stack>
-    </ThemeProvider>
+    </NavigationThemeProvider>
   );
 }
