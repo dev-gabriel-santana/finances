@@ -16,6 +16,23 @@ O aplicativo permite registrar receitas e despesas, acompanhar o saldo, visualiz
 - `react-native-gifted-charts`
 - `date-fns`
 
+## Identidade do app
+
+- Nome exibido: **Finanças**.
+- Ícone principal: `assets/images/icon.png`.
+- Ícones adaptativos do Android: `assets/images/android-icon-*.png`.
+- Splash screen: `assets/images/splash-icon.png`.
+- Fundo da splash em modo claro: `#16211D`.
+- Fundo da splash em modo escuro: `#0A0F0D`.
+
+Alterações no nome, ícone ou splash são nativas. Para visualizá-las no aplicativo instalado, gere uma nova build:
+
+```bash
+npx expo prebuild --clean
+npx expo run:ios
+npx expo run:android
+```
+
 ## Pré-requisitos
 
 - Node.js compatível com o Expo SDK 57
