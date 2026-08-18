@@ -1,4 +1,4 @@
-import { format, parseISO } from 'date-fns';
+import { addMonths, endOfYear, format, getMonth, parseISO, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BarChart, type barDataItem } from 'react-native-gifted-charts';
 
 import { ThemeToggle } from '@/src/components/ui/ThemeToggle';
 import {
@@ -23,8 +24,6 @@ import { useAppTheme } from '@/src/theme/theme';
 import { formatCurrency } from '@/src/utils/currency';
 import { formatTransactionDate } from '@/src/utils/dates';
 
-const horizonOptions = [6, 12, 24] as const;
-
 function formatPeriod(period: string): string {
   const formatted = format(parseISO(`${period}-01`), 'MMMM yyyy', { locale: ptBR });
   return formatted.charAt(0).toUpperCase() + formatted.slice(1);
@@ -33,10 +32,16 @@ function formatPeriod(period: string): string {
 export default function ProjectionsScreen() {
   const database = useDatabase();
   const { colors } = useAppTheme();
-  const [horizon, setHorizon] = useState<(typeof horizonOptions)[number]>(12);
   const [months, setMonths] = useState<FutureProjectionMonth[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const currentDate = new Date();
+  const firstMonth = startOfMonth(currentDate);
+  const lastMonth = startOfMonth(endOfYear(currentDate));
+  const [selectedMonth, setSelectedMonth] = useState(firstMonth);
+  const selectedPeriod = format(selectedMonth, 'yyyy-MM');
+  const isFirstMonth = selectedPeriod === format(firstMonth, 'yyyy-MM');
+  const isLastMonth = selectedPeriod === format(lastMonth, 'yyyy-MM');
 
   useFocusEffect(
     useCallback(() => {
@@ -46,7 +51,12 @@ export default function ProjectionsScreen() {
         setIsLoading(true);
 
         try {
-          const result = await getFutureProjections(database, horizon);
+          const result = await getFutureProjections(
+            database,
+            1,
+            currentDate,
+            selectedMonth,
+          );
 
           if (isActive) {
             setMonths(result);
@@ -72,17 +82,39 @@ export default function ProjectionsScreen() {
       return () => {
         isActive = false;
       };
-    }, [database, horizon]),
+    }, [database, selectedPeriod, selectedMonth]),
   );
 
-  const totals = months.reduce(
-    (summary, month) => ({
-      incomeInCents: summary.incomeInCents + month.incomeInCents,
-      expenseInCents: summary.expenseInCents + month.expenseInCents,
-      balanceInCents: summary.balanceInCents + month.balanceInCents,
-    }),
-    { incomeInCents: 0, expenseInCents: 0, balanceInCents: 0 },
-  );
+  const selectedProjection = months[0];
+  const totals = selectedProjection ?? {
+    incomeInCents: 0,
+    expenseInCents: 0,
+    balanceInCents: 0,
+    items: [],
+    period: selectedPeriod,
+  };
+  const chartData: barDataItem[] = [
+    {
+      value: totals.incomeInCents / 100,
+      label: 'Receitas',
+      frontColor: colors.income,
+      topLabelComponent: () => (
+        <Text style={[styles.chartValue, { color: colors.income }]}>
+          {formatCurrency(totals.incomeInCents)}
+        </Text>
+      ),
+    },
+    {
+      value: totals.expenseInCents / 100,
+      label: 'Despesas',
+      frontColor: colors.expense,
+      topLabelComponent: () => (
+        <Text style={[styles.chartValue, { color: colors.expense }]}>
+          {formatCurrency(totals.expenseInCents)}
+        </Text>
+      ),
+    },
+  ];
 
   const renderProjection = ({ item }: { item: FutureProjection }) => {
     const isIncome = item.type === 'income';
@@ -152,33 +184,27 @@ export default function ProjectionsScreen() {
         <View style={styles.headingRow}>
           <View>
             <Text style={[styles.eyebrow, { color: colors.primary }]}>PLANEJAMENTO</Text>
-            <Text style={[styles.title, { color: colors.text }]}>Próximos meses</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Projeção mensal</Text>
           </View>
           <ThemeToggle />
         </View>
 
-        <View style={[styles.segmented, { backgroundColor: colors.surfaceElevated }]}>
-          {horizonOptions.map((option) => {
-            const isSelected = horizon === option;
-
-            return (
-              <Pressable
-                key={option}
-                onPress={() => setHorizon(option)}
-                style={[
-                  styles.segment,
-                  isSelected && { backgroundColor: colors.primaryStrong },
-                ]}>
-                <Text
-                  style={[
-                    styles.segmentText,
-                    { color: isSelected ? colors.onStrong : colors.textMuted },
-                  ]}>
-                  {option} meses
-                </Text>
-              </Pressable>
-            );
-          })}
+        <View style={styles.monthNavigator}>
+          <Pressable
+            accessibilityLabel="Mês anterior"
+            disabled={isFirstMonth}
+            onPress={() => setSelectedMonth((month) => addMonths(month, -1))}
+            style={({ pressed }) => [styles.monthButton, isFirstMonth && styles.disabled, pressed && styles.pressed]}>
+            <Text style={[styles.monthArrow, { color: colors.text }]}>‹</Text>
+          </Pressable>
+          <Text style={[styles.yearCaption, { color: colors.text }]}>{formatPeriod(selectedPeriod)}</Text>
+          <Pressable
+            accessibilityLabel="Próximo mês"
+            disabled={isLastMonth}
+            onPress={() => setSelectedMonth((month) => addMonths(month, 1))}
+            style={({ pressed }) => [styles.monthButton, isLastMonth && styles.disabled, pressed && styles.pressed]}>
+            <Text style={[styles.monthArrow, { color: colors.text }]}>›</Text>
+          </Pressable>
         </View>
       </View>
 
@@ -202,7 +228,7 @@ export default function ProjectionsScreen() {
           ListHeaderComponent={
             months.length > 0 ? (
               <View style={[styles.summary, { backgroundColor: colors.balanceSurface }]}>
-                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>SALDO PROJETADO</Text>
+                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>SALDO DO MÊS</Text>
                 <Text
                   adjustsFontSizeToFit
                   numberOfLines={1}
@@ -217,14 +243,30 @@ export default function ProjectionsScreen() {
                     - {formatCurrency(totals.expenseInCents)}
                   </Text>
                 </View>
+                <View style={[styles.chartContainer, { backgroundColor: colors.surface }]}> 
+                  <BarChart
+                    data={chartData}
+                    barWidth={46}
+                    barBorderRadius={5}
+                    height={150}
+                    noOfSections={4}
+                    spacing={42}
+                    yAxisTextStyle={[styles.axisText, { color: colors.textMuted }]}
+                    xAxisLabelTextStyle={[styles.axisLabel, { color: colors.textMuted }]}
+                    rulesColor={colors.border}
+                    yAxisColor="transparent"
+                    xAxisColor={colors.border}
+                    formatYLabel={(value) => `R$ ${value}`}
+                  />
+                </View>
               </View>
             ) : null
           }
           ListEmptyComponent={
             <View style={[styles.empty, { borderColor: colors.border }]}>
               <Text style={[styles.emptyTitle, { color: colors.text }]}>Nenhum lançamento futuro</Text>
-              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                Parcelas e despesas recorrentes aparecerão aqui.
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}> 
+                Nenhum lançamento previsto para este mês.
               </Text>
             </View>
           }
@@ -275,22 +317,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 3,
   },
-  segmented: {
-    borderRadius: 6,
-    flexDirection: 'row',
-    marginTop: 18,
-    padding: 3,
-  },
-  segment: {
-    alignItems: 'center',
-    borderRadius: 4,
+  yearCaption: {
     flex: 1,
-    height: 34,
-    justifyContent: 'center',
-  },
-  segmentText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 12,
+    textAlign: 'center',
   },
   centered: {
     alignItems: 'center',
@@ -330,6 +360,42 @@ const styles = StyleSheet.create({
   summaryMetric: {
     fontFamily: 'SpaceMono',
     fontSize: 11,
+  },
+  monthNavigator: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    marginTop: 14,
+  },
+  monthButton: {
+    alignItems: 'center',
+    borderRadius: 6,
+    height: 34,
+    justifyContent: 'center',
+    width: 38,
+  },
+  monthArrow: {
+    fontSize: 29,
+    lineHeight: 31,
+  },
+  disabled: {
+    opacity: 0.25,
+  },
+  chartContainer: {
+    borderRadius: 8,
+    marginTop: 20,
+    paddingBottom: 8,
+    paddingTop: 12,
+  },
+  chartValue: {
+    fontFamily: 'SpaceMono',
+    fontSize: 9,
+    marginBottom: 4,
+  },
+  axisText: {
+    fontSize: 9,
+  },
+  axisLabel: {
+    fontSize: 10,
   },
   monthHeader: {
     alignItems: 'center',

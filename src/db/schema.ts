@@ -12,6 +12,35 @@ export const transactionTypes = ['income', 'expense'] as const;
 export const paymentMethods = ['card', 'cash', 'pix'] as const;
 export const paymentModalities = ['debit', 'credit'] as const;
 
+export const cards = sqliteTable(
+  'cards',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    name: text('name').notNull(),
+    brand: text('brand').notNull(),
+    closingDay: integer('closing_day').notNull(),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [
+    check('cards_closing_day_valid', sql`${table.closingDay} between 1 and 31`),
+    uniqueIndex('cards_name_idx').on(table.name),
+  ],
+);
+
+export const categories = sqliteTable(
+  'categories',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    name: text('name').notNull(),
+    color: text('color'),
+    icon: text('icon'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [uniqueIndex('categories_name_idx').on(table.name)],
+);
+
 export const transactions = sqliteTable(
   'transactions',
   {
@@ -64,6 +93,7 @@ export const recurringExpenseRules = sqliteTable(
   'recurring_expense_rules',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
+    type: text('type', { enum: transactionTypes }).notNull().default('expense'),
     title: text('title').notNull(),
     description: text('description'),
     amountInCents: integer('amount_in_cents').notNull(),
@@ -81,6 +111,10 @@ export const recurringExpenseRules = sqliteTable(
     updatedAt: text('updated_at').notNull(),
   },
   (table) => [
+    check(
+      'recurring_expenses_type_valid',
+      sql`${table.type} in ('income', 'expense')`,
+    ),
     check('recurring_expenses_amount_positive', sql`${table.amountInCents} > 0`),
     index('recurring_expenses_due_idx').on(table.isActive, table.nextOccurrenceDate),
   ],
@@ -90,6 +124,10 @@ export type Transaction = typeof transactions.$inferSelect;
 export type NewTransaction = typeof transactions.$inferInsert;
 export type RecurringExpenseRule = typeof recurringExpenseRules.$inferSelect;
 export type NewRecurringExpenseRule = typeof recurringExpenseRules.$inferInsert;
+export type Card = typeof cards.$inferSelect;
+export type NewCard = typeof cards.$inferInsert;
+export type Category = typeof categories.$inferSelect;
+export type NewCategory = typeof categories.$inferInsert;
 export type TransactionType = (typeof transactionTypes)[number];
 export type PaymentMethod = (typeof paymentMethods)[number];
 export type PaymentModality = (typeof paymentModalities)[number];

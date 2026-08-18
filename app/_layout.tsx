@@ -12,6 +12,7 @@ import 'react-native-reanimated';
 
 import { ThemeToggle } from '@/src/components/ui/ThemeToggle';
 import { DatabaseProvider } from '@/src/db/provider';
+import { BiometricGate } from '@/src/security/BiometricGate';
 import { AppThemeProvider, useAppTheme } from '@/src/theme/theme';
 
 export {
@@ -49,9 +50,11 @@ export default function RootLayout() {
 
   return (
     <AppThemeProvider>
-      <DatabaseProvider>
-        <RootLayoutNav />
-      </DatabaseProvider>
+      <BiometricGate>
+        <DatabaseProvider>
+          <RootLayoutNav />
+        </DatabaseProvider>
+      </BiometricGate>
     </AppThemeProvider>
   );
 }

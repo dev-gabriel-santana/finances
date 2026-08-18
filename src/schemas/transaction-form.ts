@@ -32,44 +32,42 @@ export const transactionFormSchema = z
       .refine((value) => Number(value) <= 60, 'O máximo é 60 parcelas'),
   })
   .superRefine((values, context) => {
-    if (values.type !== 'expense') {
-      return;
-    }
+    if (values.type === 'expense') {
+      if (!values.paymentMethod) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Selecione a forma de pagamento',
+          path: ['paymentMethod'],
+        });
+      }
 
-    if (!values.paymentMethod) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Selecione a forma de pagamento',
-        path: ['paymentMethod'],
-      });
-    }
+      if (values.paymentMethod === 'card' && !values.cardId) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Selecione o cartão',
+          path: ['cardId'],
+        });
+      }
 
-    if (values.paymentMethod === 'card' && !values.cardId) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Selecione o cartão',
-        path: ['cardId'],
-      });
-    }
+      if (values.paymentMethod === 'card' && !values.paymentModality) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Selecione a modalidade',
+          path: ['paymentModality'],
+        });
+      }
 
-    if (values.paymentMethod === 'card' && !values.paymentModality) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Selecione a modalidade',
-        path: ['paymentModality'],
-      });
-    }
-
-    if (
-      values.paymentMethod === 'card' &&
-      values.paymentModality === 'credit' &&
-      !values.invoiceDueDate
-    ) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Informe o vencimento da fatura',
-        path: ['invoiceDueDate'],
-      });
+      if (
+        values.paymentMethod === 'card' &&
+        values.paymentModality === 'credit' &&
+        !values.invoiceDueDate
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Informe o vencimento da fatura',
+          path: ['invoiceDueDate'],
+        });
+      }
     }
 
     const installmentCount = Number(values.installmentCount);

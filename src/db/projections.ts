@@ -40,10 +40,17 @@ export async function getFutureProjections(
   database: Database,
   monthCount = 12,
   referenceDate = new Date(),
+  startDateOverride?: Date,
 ): Promise<FutureProjectionMonth[]> {
   await generateDueRecurringExpenses(database, format(referenceDate, 'yyyy-MM-dd'));
 
-  const startDate = startOfMonth(addMonths(referenceDate, 1));
+  if (monthCount <= 0) {
+    return [];
+  }
+
+  const startDate = startOfMonth(
+    startDateOverride ?? addMonths(referenceDate, 1),
+  );
   const endDate = endOfMonth(addMonths(startDate, monthCount - 1));
   const startDateIso = format(startDate, 'yyyy-MM-dd');
   const endDateIso = format(endDate, 'yyyy-MM-dd');
@@ -104,7 +111,7 @@ export async function getFutureProjections(
           key: `recurring-${occurrenceKey}`,
           transactionId: null,
           recurringRuleId: rule.id,
-          type: 'expense',
+          type: rule.type,
           title: rule.title,
           category: rule.category,
           amountInCents: rule.amountInCents,

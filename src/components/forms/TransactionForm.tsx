@@ -1,7 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format, parseISO } from 'date-fns';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,23 +18,23 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
-  cards,
-  categories,
-  getCategoryLabel,
-  getCategoryValue,
   paymentMethods,
   paymentModalities,
 } from '@/src/constants/transactions';
 import {
   createInstallments,
-  createRecurringExpense,
+  createRecurringTransaction,
 } from '@/src/db/automation';
+import {
+  listCards,
+  listCategories,
+} from '@/src/db/queries/cards-categories';
 import {
   insertTransaction,
   updateTransaction,
 } from '@/src/db/queries/transactions';
 import { useDatabase } from '@/src/db/provider';
-import type { Transaction, TransactionType } from '@/src/db/schema';
+import type { Card, Category, Transaction, TransactionType } from '@/src/db/schema';
 import {
   transactionFormSchema,
   type TransactionFormValues,
@@ -69,7 +70,7 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
       title: transaction?.title ?? '',
       description: transaction?.description ?? '',
       amount: transaction ? String(transaction.amountInCents) : '',
-      category: transaction ? getCategoryValue(type, transaction.category) : '',
+      category: transaction?.category ?? '',
       transactionDate: transaction
         ? parseISO(transaction.transactionDate)
         : new Date(),
@@ -94,6 +95,43 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
   const usesCredit = usesCard && paymentModality === 'credit';
   const installments = Number(installmentCount) || 1;
   const installmentPreview = Math.floor(Number(amount || 0) / installments);
+  const [availableCards, setAvailableCards] = useState<Card[]>([]);
+  const [availableCategories, setAvailableCategories] = useState<Category[]>([]);
+  const [isLoadingOptions, setIsLoadingOptions] = useState(true);
+  const [optionsError, setOptionsError] = useState(false);
+
+  const loadOptions = useCallback(async () => {
+    setIsLoadingOptions(true);
+
+    try {
+      const [cardRows, categoryRows] = await Promise.all([
+        listCards(database),
+        listCategories(database),
+      ]);
+      setAvailableCards(cardRows);
+      setAvailableCategories(categoryRows);
+      setOptionsError(false);
+    } catch {
+      setOptionsError(true);
+    } finally {
+      setIsLoadingOptions(false);
+    }
+  }, [database]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadOptions();
+    }, [loadOptions]),
+  );
+
+  const categoryOptions = availableCategories.map((category) => ({
+    label: category.name,
+    value: category.name,
+  }));
+  const cardOptions = availableCards.map((card) => ({
+    label: `${card.name} · ${card.brand}`,
+    value: String(card.id),
+  }));
 
   const onSubmit = async (values: TransactionFormValues) => {
     try {
@@ -102,7 +140,7 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
         title: values.title,
         description: values.description || null,
         amountInCents: Number(values.amount),
-        category: getCategoryLabel(type, values.category),
+        category: values.category,
         transactionDate: format(values.transactionDate, 'yyyy-MM-dd'),
         merchant: isExpense ? values.merchant || null : null,
         paymentMethod: isExpense ? values.paymentMethod ?? null : null,
@@ -117,7 +155,7 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
       const savedTransaction = transaction
         ? await updateTransaction(database, transaction.id, input)
         : values.isRecurring
-          ? await createRecurringExpense(database, input)
+          ? await createRecurringTransaction(database, input)
           : Number(values.installmentCount) > 1 && values.invoiceDueDate
             ? await createInstallments(database, {
                 ...input,
@@ -236,11 +274,17 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
                   error={errors.category?.message}
                   label="Categoria"
                   onChange={field.onChange}
-                  options={categories[type]}
+                  options={categoryOptions}
+                  placeholder={isLoadingOptions ? 'Carregando categorias...' : 'Selecione uma categoria'}
                   value={field.value}
                 />
               )}
             />
+            {optionsError ? (
+              <Text style={[styles.optionsError, { color: colors.expense }]}> 
+                Não foi possível carregar os cartões e categorias.
+              </Text>
+            ) : null}
 
             <Controller
               control={control}
@@ -305,7 +349,8 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
                           error={errors.cardId?.message}
                           label="Cartão utilizado"
                           onChange={(value) => field.onChange(value || undefined)}
-                          options={cards}
+                          options={cardOptions}
+                          placeholder={isLoadingOptions ? 'Carregando cartões...' : 'Selecione um cartão'}
                           value={field.value}
                         />
                       )}
@@ -376,40 +421,41 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
                   </>
                 ) : null}
 
-                {!isEditing ? (
-                  <Controller
-                    control={control}
-                    name="isRecurring"
-                    render={({ field }) => (
-                      <View
-                        style={[
-                          styles.recurringRow,
-                          { backgroundColor: colors.surface, borderColor: colors.border },
-                        ]}>
-                        <View style={styles.recurringText}>
-                          <Text style={[styles.recurringTitle, { color: colors.text }]}>
-                            Despesa recorrente
-                          </Text>
-                          <Text style={[styles.recurringDescription, { color: colors.textMuted }]}>
-                            Repete automaticamente todos os meses
-                          </Text>
-                        </View>
-                        <Switch
-                          onValueChange={(value) => {
-                            field.onChange(value);
-                            if (value) {
-                              setValue('installmentCount', '1');
-                            }
-                          }}
-                          trackColor={{ false: colors.border, true: colors.primary }}
-                          thumbColor={colors.onStrong}
-                          value={field.value}
-                        />
-                      </View>
-                    )}
-                  />
-                ) : null}
               </>
+            ) : null}
+
+            {!isEditing ? (
+              <Controller
+                control={control}
+                name="isRecurring"
+                render={({ field }) => (
+                  <View
+                    style={[
+                      styles.recurringRow,
+                      { backgroundColor: colors.surface, borderColor: colors.border },
+                    ]}>
+                    <View style={styles.recurringText}>
+                      <Text style={[styles.recurringTitle, { color: colors.text }]}> 
+                        {isExpense ? 'Despesa recorrente' : 'Receita recorrente'}
+                      </Text>
+                      <Text style={[styles.recurringDescription, { color: colors.textMuted }]}> 
+                        Repete automaticamente todos os meses
+                      </Text>
+                    </View>
+                    <Switch
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        if (value) {
+                          setValue('installmentCount', '1');
+                        }
+                      }}
+                      trackColor={{ false: colors.border, true: colors.primary }}
+                      thumbColor={colors.onStrong}
+                      value={field.value}
+                    />
+                  </View>
+                )}
+              />
             ) : null}
 
             <Pressable
@@ -518,6 +564,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginBottom: 18,
     marginTop: -12,
+  },
+  optionsError: {
+    fontSize: 11,
+    marginBottom: 14,
+    marginTop: -8,
   },
   submitButton: {
     alignItems: 'center',

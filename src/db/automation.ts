@@ -17,6 +17,8 @@ export interface CreateRecurringExpenseInput extends CreateTransactionInput {
   transactionDate: string;
 }
 
+export type CreateRecurringTransactionInput = CreateRecurringExpenseInput;
+
 export interface CreateInstallmentsInput extends CreateTransactionInput {
   installmentCount: number;
   invoiceDueDate: string;
@@ -38,15 +40,16 @@ export function getNextMonthlyDate(date: string, preferredDay: number): string {
   );
 }
 
-export async function createRecurringExpense(
+export async function createRecurringTransaction(
   database: Database,
-  input: CreateRecurringExpenseInput,
+  input: CreateRecurringTransactionInput,
 ): Promise<Transaction> {
   return database.transaction(async (transaction) => {
     const now = new Date().toISOString();
     const [rule] = await transaction
       .insert(recurringExpenseRules)
       .values({
+        type: input.type,
         title: input.title,
         description: input.description,
         amountInCents: input.amountInCents,
@@ -160,7 +163,7 @@ export async function generateDueRecurringExpenses(
       await database
         .insert(transactions)
         .values({
-          type: 'expense',
+          type: rule.type,
           title: rule.title,
           description: rule.description,
           amountInCents: rule.amountInCents,
@@ -193,3 +196,5 @@ export async function generateDueRecurringExpenses(
       .where(eq(recurringExpenseRules.id, rule.id));
   }
 }
+
+export const createRecurringExpense = createRecurringTransaction;

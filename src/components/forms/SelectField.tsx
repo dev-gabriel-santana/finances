@@ -1,5 +1,5 @@
-import { Picker } from '@react-native-picker/picker';
-import { StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { SelectOption } from '@/src/constants/transactions';
 import { useAppTheme } from '@/src/theme/theme';
@@ -22,26 +22,70 @@ export function SelectField({
   placeholder = 'Selecione',
 }: SelectFieldProps) {
   const { colors } = useAppTheme();
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedLabel = options.find((option) => option.value === value)?.label;
+
+  const handleSelect = (selectedValue: string) => {
+    onChange(selectedValue);
+    setIsOpen(false);
+  };
 
   return (
     <View style={styles.field}>
       <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
-      <View style={[
-        styles.pickerFrame,
-        { backgroundColor: colors.surface, borderColor: colors.border },
-        error && styles.pickerError,
-      ]}>
-        <Picker
-          dropdownIconColor={colors.textMuted}
-          onValueChange={(selectedValue) => onChange(String(selectedValue))}
-          selectedValue={value ?? ''}
-          style={[styles.picker, { color: colors.text }]}>
-          <Picker.Item color={colors.textMuted} label={placeholder} value="" />
-          {options.map((option) => (
-            <Picker.Item color={colors.text} key={option.value} label={option.label} value={option.value} />
-          ))}
-        </Picker>
-      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: isOpen }}
+        onPress={() => setIsOpen(true)}
+        style={({ pressed }) => [
+          styles.pickerFrame,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+          error && styles.pickerError,
+          pressed && styles.pressed,
+        ]}>
+        <Text style={[styles.value, { color: selectedLabel ? colors.text : colors.textMuted }]}>
+          {selectedLabel ?? placeholder}
+        </Text>
+        <Text style={[styles.chevron, { color: colors.textMuted }]}>⌄</Text>
+      </Pressable>
+
+      <Modal
+        animationType="fade"
+        onRequestClose={() => setIsOpen(false)}
+        transparent
+        visible={isOpen}>
+        <Pressable style={styles.overlay} onPress={() => setIsOpen(false)}>
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={[styles.menu, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+            <Text style={[styles.menuTitle, { color: colors.text }]}>{label}</Text>
+            {options.length === 0 ? (
+              <Text style={[styles.empty, { color: colors.textMuted }]}>Nenhuma opção cadastrada</Text>
+            ) : (
+              options.map((option) => {
+                const isSelected = option.value === value;
+
+                return (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => handleSelect(option.value)}
+                    style={({ pressed }) => [
+                      styles.option,
+                      { borderBottomColor: colors.border },
+                      isSelected && { backgroundColor: colors.primary },
+                      pressed && styles.pressed,
+                    ]}>
+                    <Text style={[styles.optionText, { color: isSelected ? colors.onStrong : colors.text }]}>
+                      {option.label}
+                    </Text>
+                    {isSelected ? <Text style={[styles.checkmark, { color: colors.onStrong }]}>✓</Text> : null}
+                  </Pressable>
+                );
+              })
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
       {error ? <Text style={[styles.error, { color: colors.expense }]}>{error}</Text> : null}
     </View>
   );
@@ -63,12 +107,18 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
     height: 50,
-    justifyContent: 'center',
-    overflow: 'hidden',
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
   },
-  picker: {
-    color: '#17201c',
-    height: 50,
+  value: {
+    flex: 1,
+    fontSize: 14,
+  },
+  chevron: {
+    fontSize: 18,
+    marginLeft: 10,
   },
   pickerError: {
     borderColor: '#c34231',
@@ -77,5 +127,46 @@ const styles = StyleSheet.create({
     color: '#b73d2e',
     fontSize: 11,
     marginTop: 5,
+  },
+  overlay: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
+  menu: {
+    borderRadius: 10,
+    borderWidth: 1,
+    maxHeight: '75%',
+    overflow: 'hidden',
+    width: '100%',
+  },
+  menuTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+  },
+  option: {
+    alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    minHeight: 48,
+    paddingHorizontal: 18,
+  },
+  optionText: {
+    flex: 1,
+    fontSize: 14,
+  },
+  checkmark: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  empty: {
+    padding: 18,
+  },
+  pressed: {
+    opacity: 0.7,
   },
 });

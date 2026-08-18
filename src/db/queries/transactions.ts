@@ -134,6 +134,13 @@ export async function deleteTransaction(
   }
 }
 
+export async function clearAllTransactions(database: Database): Promise<void> {
+  await database.transaction(async (databaseTransaction) => {
+    await databaseTransaction.delete(transactions);
+    await databaseTransaction.delete(recurringExpenseRules);
+  });
+}
+
 export async function listTransactions(
   database: Database,
   options: ListTransactionsOptions = {},

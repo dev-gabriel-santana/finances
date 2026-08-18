@@ -75,6 +75,25 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Cadastros',
+          tabBarIcon: ({ color }) => (
+            <SymbolView
+              name={{
+                ios: 'slider.horizontal.3',
+                android: 'tune',
+                web: 'tune',
+              }}
+              tintColor={color}
+              size={24}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen name="cards" options={{ href: null }} />
+      <Tabs.Screen name="categories" options={{ href: null }} />
     </Tabs>
   );
 }
