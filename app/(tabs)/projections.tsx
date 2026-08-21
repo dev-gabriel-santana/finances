@@ -22,6 +22,7 @@ import {
   type FutureProjection,
   type FutureProjectionMonth,
 } from '@/src/db/projections';
+import { getCurrentAccountPixAdjustment } from '@/src/db/queries/transactions';
 import { useDatabase } from '@/src/db/provider';
 import { useAppTheme } from '@/src/theme/theme';
 import { formatCurrency } from '@/src/utils/currency';
@@ -40,7 +41,9 @@ export default function ProjectionsScreen() {
   const database = useDatabase();
   const { colors } = useAppTheme();
   const [months, setMonths] = useState<FutureProjectionMonth[]>([]);
+  const [currentBalanceBaseInCents, setCurrentBalanceBaseInCents] = useState(0);
   const [currentBalanceInCents, setCurrentBalanceInCents] = useState(0);
+  const [currentPixAdjustmentInCents, setCurrentPixAdjustmentInCents] = useState(0);
   const [currentBalanceInput, setCurrentBalanceInput] = useState('');
   const [isEditingCurrentBalance, setIsEditingCurrentBalance] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,9 +64,10 @@ export default function ProjectionsScreen() {
         setIsLoading(true);
 
         try {
-          const [result, storedCurrentBalance] = await Promise.all([
+          const [result, storedCurrentBalance, pixAdjustment] = await Promise.all([
             getFutureProjections(database, 1, currentDate, selectedMonth),
             Storage.getItem(CURRENT_BALANCE_STORAGE_KEY),
+            getCurrentAccountPixAdjustment(database, currentDate),
           ]);
 
           if (isActive) {
@@ -71,11 +75,15 @@ export default function ProjectionsScreen() {
             const parsedCurrentBalance = Number(storedCurrentBalance ?? '0');
 
             if (Number.isFinite(parsedCurrentBalance) && parsedCurrentBalance >= 0) {
-              setCurrentBalanceInCents(parsedCurrentBalance);
+              setCurrentBalanceBaseInCents(parsedCurrentBalance);
+              setCurrentBalanceInCents(parsedCurrentBalance + pixAdjustment.balanceInCents);
               setCurrentBalanceInput(String(parsedCurrentBalance));
+              setCurrentPixAdjustmentInCents(pixAdjustment.balanceInCents);
             } else {
+              setCurrentBalanceBaseInCents(0);
               setCurrentBalanceInCents(0);
               setCurrentBalanceInput('');
+              setCurrentPixAdjustmentInCents(0);
             }
             setError(null);
           }
@@ -109,7 +117,8 @@ export default function ProjectionsScreen() {
       return;
     }
 
-    setCurrentBalanceInCents(nextBalanceInCents);
+    setCurrentBalanceInCents(nextBalanceInCents + currentPixAdjustmentInCents);
+    setCurrentBalanceBaseInCents(nextBalanceInCents);
     setIsEditingCurrentBalance(false);
 
     try {
@@ -123,7 +132,7 @@ export default function ProjectionsScreen() {
   };
 
   const handleCancelCurrentBalanceEdit = () => {
-    setCurrentBalanceInput(String(currentBalanceInCents));
+    setCurrentBalanceInput(String(currentBalanceBaseInCents));
     setIsEditingCurrentBalance(false);
   };
 
@@ -135,7 +144,11 @@ export default function ProjectionsScreen() {
     items: [],
     period: selectedPeriod,
   };
-  const futureBalanceAfterBillsInCents = currentBalanceInCents + totals.balanceInCents;
+  const isSelectedCurrentMonth = selectedPeriod === format(currentDate, 'yyyy-MM');
+  const futureBalanceAfterBillsInCents =
+    currentBalanceInCents +
+    totals.balanceInCents -
+    (isSelectedCurrentMonth ? currentPixAdjustmentInCents : 0);
   const chartData: barDataItem[] = [
     {
       value: totals.incomeInCents / 100,

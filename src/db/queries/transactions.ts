@@ -1,3 +1,4 @@
+import { format, startOfMonth } from 'date-fns';
 import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 
 import type { Database } from '../client';
@@ -36,6 +37,12 @@ export interface MonthlyBalance extends BalanceSummary {
 export interface BalanceHistoryOptions {
   startDate?: string;
   endDate?: string;
+}
+
+export interface CurrentAccountPixAdjustment {
+  incomeInCents: number;
+  expenseInCents: number;
+  balanceInCents: number;
 }
 
 const incomeTotal = sql<number>`coalesce(sum(case when ${transactions.type} = 'income' then ${transactions.amountInCents} else 0 end), 0)`;
@@ -201,6 +208,39 @@ export async function getBalanceSummary(
     expenseInCents: 0,
     balanceInCents: 0,
   };
+}
+
+export async function getCurrentAccountPixAdjustment(
+  database: Database,
+  referenceDate = new Date(),
+): Promise<CurrentAccountPixAdjustment> {
+  const today = format(referenceDate, 'yyyy-MM-dd');
+  const monthStart = format(startOfMonth(referenceDate), 'yyyy-MM-dd');
+  const pixTransactions = await database
+    .select({ type: transactions.type, amountInCents: transactions.amountInCents })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.paymentMethod, 'pix'),
+        gte(transactions.transactionDate, monthStart),
+        lte(transactions.transactionDate, today),
+      ),
+    );
+
+  return pixTransactions.reduce<CurrentAccountPixAdjustment>(
+    (adjustment, transaction) => {
+      if (transaction.type === 'income') {
+        adjustment.incomeInCents += transaction.amountInCents;
+        adjustment.balanceInCents += transaction.amountInCents;
+      } else {
+        adjustment.expenseInCents += transaction.amountInCents;
+        adjustment.balanceInCents -= transaction.amountInCents;
+      }
+
+      return adjustment;
+    },
+    { incomeInCents: 0, expenseInCents: 0, balanceInCents: 0 },
+  );
 }
 
 export async function getMonthlyBalanceHistory(

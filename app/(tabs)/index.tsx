@@ -17,12 +17,15 @@ import { BalanceSummary } from '@/src/components/dashboard/BalanceSummary';
 import { TransactionList } from '@/src/components/dashboard/TransactionList';
 import { ThemeToggle } from '@/src/components/ui/ThemeToggle';
 import { CURRENT_BALANCE_STORAGE_KEY } from '@/src/constants/storageKeys';
+import { getCurrentAccountPixAdjustment } from '@/src/db/queries/transactions';
+import { useDatabase } from '@/src/db/provider';
 import { useDashboard } from '@/src/hooks/useDashboard';
 import { useAppTheme } from '@/src/theme/theme';
 import { formatCurrency } from '@/src/utils/currency';
 
 export default function DashboardScreen() {
   const { colors } = useAppTheme();
+  const database = useDatabase();
   const [currentBalanceInCents, setCurrentBalanceInCents] = useState(0);
   const {
     summary,
@@ -35,11 +38,14 @@ export default function DashboardScreen() {
 
   const loadCurrentBalance = useCallback(async () => {
     try {
-      const stored = await Storage.getItem(CURRENT_BALANCE_STORAGE_KEY);
+      const [stored, pixAdjustment] = await Promise.all([
+        Storage.getItem(CURRENT_BALANCE_STORAGE_KEY),
+        getCurrentAccountPixAdjustment(database),
+      ]);
       const parsed = Number(stored ?? '0');
 
       if (Number.isFinite(parsed) && parsed >= 0) {
-        setCurrentBalanceInCents(parsed);
+        setCurrentBalanceInCents(parsed + pixAdjustment.balanceInCents);
         return;
       }
     } catch {
@@ -47,7 +53,7 @@ export default function DashboardScreen() {
     }
 
     setCurrentBalanceInCents(0);
-  }, []);
+  }, [database]);
 
   useFocusEffect(
     useCallback(() => {
