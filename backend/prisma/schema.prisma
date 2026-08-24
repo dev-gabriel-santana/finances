@@ -1,0 +1,167 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum TransactionType {
+  income
+  expense
+}
+
+enum PaymentMethod {
+  card
+  cash
+  pix
+}
+
+enum PaymentModality {
+  debit
+  credit
+}
+
+// ─── Models ─────────────────────────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(cuid())
+  // Stored encrypted; use emailHash for lookups to avoid plaintext in DB
+  email        String
+  emailHash    String    @unique
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  transactions   Transaction[]
+  cards          Card[]
+  categories     Category[]
+  recurringRules RecurringExpenseRule[]
+  refreshTokens  RefreshToken[]
+  auditLogs      AuditLog[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id         String    @id @default(cuid())
+  userId     String
+  // SHA-256 hash of the raw opaque token — raw value never stored
+  tokenHash  String    @unique
+  // Tokens in the same family are all revoked on replay-attack detection
+  familyId   String
+  deviceInfo String?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
+
+model Transaction {
+  id                 Int              @id @default(autoincrement())
+  userId             String
+  type               TransactionType
+  title              String
+  description        String?
+  amountInCents      Int
+  category           String
+  transactionDate    String
+  merchant           String?
+  paymentMethod      PaymentMethod?
+  cardId             String?
+  paymentModality    PaymentModality?
+  invoiceDueDate     String?
+  recurringRuleId    Int?
+  installmentGroupId String?
+  installmentNumber  Int?
+  installmentCount   Int?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, transactionDate])
+  @@index([userId, type, transactionDate])
+  @@index([userId, recurringRuleId])
+  @@map("transactions")
+}
+
+model Card {
+  id         Int      @id @default(autoincrement())
+  userId     String
+  name       String
+  brand      String
+  closingDay Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("cards")
+}
+
+model Category {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  name      String
+  color     String?
+  icon      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("categories")
+}
+
+model RecurringExpenseRule {
+  id                 Int              @id @default(autoincrement())
+  userId             String
+  type               TransactionType  @default(expense)
+  title              String
+  description        String?
+  amountInCents      Int
+  category           String
+  merchant           String?
+  paymentMethod      PaymentMethod?
+  cardId             String?
+  paymentModality    PaymentModality?
+  nextOccurrenceDate String
+  occurrenceDay      Int              @default(1)
+  nextInvoiceDueDate String?
+  invoiceDueDay      Int?
+  isActive           Boolean          @default(true)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isActive, nextOccurrenceDate])
+  @@map("recurring_expense_rules")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String?
+  entityId   String?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

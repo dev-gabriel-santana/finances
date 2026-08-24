@@ -1,13 +1,23 @@
 import { SymbolView } from 'expo-symbols';
 import { Tabs } from 'expo-router';
+import { Alert, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useAuth } from '@/src/auth/AuthContext';
 import { useAppTheme } from '@/src/theme/theme';
 
 export default function TabLayout() {
   const { colors } = useAppTheme();
+  const { logout } = useAuth();
   const insets = useSafeAreaInsets();
   const tabBarContentHeight = 66;
+
+  const handleLogout = () => {
+    Alert.alert('Sair da conta?', 'Você precisará fazer login novamente para acessar o app.', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Sair', style: 'destructive', onPress: () => void logout() },
+    ]);
+  };
 
   return (
     <Tabs
@@ -97,6 +107,33 @@ export default function TabLayout() {
       />
       <Tabs.Screen name="cards" options={{ href: null }} />
       <Tabs.Screen name="categories" options={{ href: null }} />
+      <Tabs.Screen
+        name="logout"
+        options={{
+          title: 'Sair',
+          tabBarActiveTintColor: colors.expense,
+          tabBarButton: ({ onPress: _ignored, style, children }) => (
+            <Pressable
+              accessibilityLabel="Sair da conta"
+              accessibilityRole="button"
+              onPress={handleLogout}
+              style={style}>
+              {children}
+            </Pressable>
+          ),
+          tabBarIcon: ({ color }) => (
+            <SymbolView
+              name={{
+                ios: 'rectangle.portrait.and.arrow.right',
+                android: 'logout',
+                web: 'logout',
+              }}
+              tintColor={color}
+              size={24}
+            />
+          ),
+        }}
+      />
     </Tabs>
   );
 }

@@ -4,6 +4,8 @@ import {
   DefaultTheme,
   Stack,
   ThemeProvider as NavigationThemeProvider,
+  useRouter,
+  useSegments,
 } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -24,6 +26,7 @@ import {
   CURRENT_BALANCE_STORAGE_KEY,
   INITIAL_BALANCE_ONBOARDING_DONE_KEY,
 } from '@/src/constants/storageKeys';
+import { AuthProvider, useAuth } from '@/src/auth/AuthContext';
 import { DatabaseProvider } from '@/src/db/provider';
 import { BiometricGate } from '@/src/security/BiometricGate';
 import { AppThemeProvider, useAppTheme } from '@/src/theme/theme';
@@ -64,17 +67,34 @@ export default function RootLayout() {
 
   return (
     <AppThemeProvider>
-      <BiometricGate>
-        <DatabaseProvider>
-          <RootLayoutNav />
-        </DatabaseProvider>
-      </BiometricGate>
+      <AuthProvider>
+        <BiometricGate>
+          <DatabaseProvider>
+            <RootLayoutNav />
+          </DatabaseProvider>
+        </BiometricGate>
+      </AuthProvider>
     </AppThemeProvider>
   );
 }
 
 function RootLayoutNav() {
   const { mode, colors } = useAppTheme();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isAuthLoading) return;
+    const inAuthGroup = (segments[0] as string) === 'auth';
+    if (!isAuthenticated && !inAuthGroup) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      router.replace('/auth/login' as any);
+    } else if (isAuthenticated && inAuthGroup) {
+      router.replace('/(tabs)');
+    }
+  }, [isAuthenticated, isAuthLoading, segments, router]);
+
   const [isOnboardingVisible, setIsOnboardingVisible] = useState(false);
   const [currentBalanceInput, setCurrentBalanceInput] = useState('');
   const [isSavingOnboarding, setIsSavingOnboarding] = useState(false);
@@ -163,6 +183,7 @@ function RootLayoutNav() {
           headerTintColor: colors.text,
           headerTitleStyle: { color: colors.text },
         }}>
+        <Stack.Screen name="auth" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
           name="transactions/expense"

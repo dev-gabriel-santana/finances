@@ -175,6 +175,87 @@ Para apagar todos os dados de movimentação:
 
 Essa ação remove receitas, despesas, parcelas e regras recorrentes. Cartões e categorias são preservados.
 
+## Backend
+
+O backend fica em `backend/` e expõe uma API REST construída com Express, Prisma e PostgreSQL.
+
+### Pré-requisitos
+
+- PostgreSQL rodando localmente ou em um serviço gerenciado.
+- Node.js compatível com o backend (veja `backend/.nvmrc` se existir).
+
+### Configuração inicial (executar uma vez)
+
+```bash
+cd backend
+npm install
+```
+
+Copie o arquivo de variáveis de ambiente e preencha os valores:
+
+```bash
+cp .env.example .env
+```
+
+Gere o par de chaves RSA-4096 e as chaves simétricas de criptografia:
+
+```bash
+npm run keys:generate
+```
+
+Cole as quatro linhas geradas no `.env`. Em seguida, preencha a `DATABASE_URL` com as credenciais do seu PostgreSQL:
+
+```
+DATABASE_URL="postgresql://usuario:senha@localhost:5432/finances_db?schema=public"
+```
+
+Crie as tabelas no banco via Prisma Migrate:
+
+```bash
+npm run db:migrate
+```
+
+### Executar em desenvolvimento
+
+```bash
+npm run dev
+```
+
+O servidor sobe na porta definida em `PORT` (padrão `3000`).
+
+### Variáveis de ambiente relevantes
+
+| Variável | Descrição |
+|---|---|
+| `DATABASE_URL` | Connection string do PostgreSQL |
+| `JWT_PRIVATE_KEY_BASE64` | Chave privada RSA-4096 em Base64 (gerada pelo script) |
+| `JWT_PUBLIC_KEY_BASE64` | Chave pública RSA-4096 em Base64 (gerada pelo script) |
+| `FIELD_ENCRYPTION_KEY` | 64 hex chars (32 bytes) para AES-256-GCM |
+| `FIELD_HMAC_KEY` | 64 hex chars (32 bytes) para índices HMAC |
+| `CORS_ORIGIN` | Origem permitida pelo CORS (ex.: `http://localhost:8081`) |
+| `PORT` | Porta do servidor (padrão `3000`) |
+
+### Rotas disponíveis
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `POST` | `/auth/register` | Cria uma conta |
+| `POST` | `/auth/login` | Autentica e retorna tokens |
+| `POST` | `/auth/refresh` | Renova o access token |
+| `POST` | `/auth/logout` | Revoga o refresh token |
+| `GET` | `/users/me` | Dados do usuário autenticado |
+| `GET` | `/health` | Liveness probe |
+
+### Conectar o app ao backend
+
+Crie um arquivo `.env` na raiz do app (junto ao `package.json`) e defina:
+
+```
+EXPO_PUBLIC_API_URL=http://SEU_IP_LOCAL:3000
+```
+
+Use o IP da máquina na rede local (não `localhost`) para que o dispositivo físico consiga alcançar o servidor.
+
 ## Banco de dados
 
 O banco local é `finances.db`, criado pelo `expo-sqlite`. Os dados ficam no dispositivo e continuam disponíveis depois que o aplicativo é fechado.

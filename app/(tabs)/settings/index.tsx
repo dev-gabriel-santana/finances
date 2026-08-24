@@ -5,11 +5,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemeToggle } from '@/src/components/ui/ThemeToggle';
 import { clearAllTransactions } from '@/src/db/queries/transactions';
 import { useDatabase } from '@/src/db/provider';
+import { useAuth } from '@/src/auth/AuthContext';
 import { useAppTheme } from '@/src/theme/theme';
 
 export default function SettingsHomeScreen() {
   const database = useDatabase();
   const { colors } = useAppTheme();
+  const { logout } = useAuth();
+
+  const handleLogout = () => {
+    Alert.alert('Sair da conta?', 'Você precisará fazer login novamente para acessar o app.', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Sair', style: 'destructive', onPress: () => void logout() },
+    ]);
+  };
 
   const handleClearAllTransactions = () => {
     Alert.alert(
@@ -81,6 +90,23 @@ export default function SettingsHomeScreen() {
             <Text style={[styles.optionDescription, { color: colors.textMuted }]}>Organize receitas e despesas</Text>
           </View>
           <Text style={[styles.chevron, { color: colors.textMuted }]}>›</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={handleLogout}
+          style={({ pressed }) => [
+            styles.option,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+            pressed && styles.pressed,
+          ]}>
+          <View style={[styles.icon, { backgroundColor: colors.expenseSurface }]}>
+            <Text style={[styles.iconText, { color: colors.expense }]}>⎋</Text>
+          </View>
+          <View style={styles.optionContent}>
+            <Text style={[styles.optionTitle, { color: colors.expense }]}>Sair da conta</Text>
+            <Text style={[styles.optionDescription, { color: colors.textMuted }]}>Encerra a sessão neste dispositivo</Text>
+          </View>
         </Pressable>
 
         <View style={[styles.dangerSection, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
