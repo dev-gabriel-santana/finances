@@ -4,6 +4,29 @@ MVP de finanças pessoais offline desenvolvido com React Native, Expo, Expo Rout
 
 O aplicativo permite registrar receitas e despesas, acompanhar o saldo, visualizar o histórico, editar e excluir lançamentos, criar despesas recorrentes, projetar parcelamentos e consultar os meses seguintes.
 
+## Sumário
+
+- [Stack](#stack)
+- [Identidade do app](#identidade-do-app)
+- [Pré-requisitos](#pré-requisitos)
+- [Instalação](#instalação)
+- [Executar o projeto](#executar-o-projeto)
+- [Como usar o app](#como-usar-o-app)
+- [Backend](#backend)
+  - [Configuração inicial](#configuração-inicial-executar-uma-vez)
+  - [Erro de acesso ao banco](#erro-de-acesso-ao-banco-p1010)
+  - [Executar em desenvolvimento](#executar-em-desenvolvimento)
+  - [Abrir o banco com Prisma Studio](#abrir-o-banco-com-prisma-studio)
+  - [Variáveis de ambiente](#variáveis-de-ambiente-relevantes)
+  - [Rotas disponíveis](#rotas-disponíveis)
+  - [Conectar o app ao backend](#conectar-o-app-ao-backend)
+- [Banco de dados](#banco-de-dados)
+- [Bloqueio biométrico](#bloqueio-biométrico)
+- [Tema](#tema)
+- [Estrutura principal](#estrutura-principal)
+- [Validação local](#validação-local)
+- [Observações](#observações)
+
 ## Stack
 
 - React Native `0.86`
@@ -206,13 +229,54 @@ npm run keys:generate
 Cole as quatro linhas geradas no `.env`. Em seguida, preencha a `DATABASE_URL` com as credenciais do seu PostgreSQL:
 
 ```
-DATABASE_URL="postgresql://usuario:senha@localhost:5432/finances_db?schema=public"
+DATABASE_URL="<STRING_DE_CONEXAO_DO_POSTGRES>"
 ```
+
+Nunca commite o arquivo `.env` nem publique chaves, senhas ou tokens. Use o `.env.example` apenas como modelo.
 
 Crie as tabelas no banco via Prisma Migrate:
 
 ```bash
 npm run db:migrate
+```
+
+#### Erro de acesso ao banco (`P1010`)
+
+Se aparecer `User ... was denied access on the database finances_db.public`, verifique se o PostgreSQL está rodando:
+
+```bash
+pg_isready -h localhost -p 5432
+```
+
+Confirme também que o `DATABASE_URL` em `backend/.env` está preenchido com os dados do seu ambiente local. Não coloque credenciais reais no README:
+
+```env
+DATABASE_URL="<STRING_DE_CONEXAO_DO_POSTGRES>"
+```
+
+Se o usuário ou o banco ainda não existirem, crie-os conectado a um usuário administrador do PostgreSQL:
+
+```bash
+psql -d postgres
+```
+
+```sql
+CREATE ROLE finances_user WITH LOGIN PASSWORD 'SUA_SENHA';
+CREATE DATABASE finances_db OWNER finances_user;
+\q
+```
+
+Depois, atualize o `DATABASE_URL` local com esses valores e execute novamente:
+
+```bash
+cd backend
+npm run db:migrate
+```
+
+Se o banco já existir, conceda a permissão ao usuário configurado no `DATABASE_URL`:
+
+```sql
+GRANT ALL PRIVILEGES ON DATABASE <NOME_DO_BANCO> TO <USUARIO_POSTGRES>;
 ```
 
 ### Executar em desenvolvimento
@@ -223,28 +287,41 @@ npm run dev
 
 O servidor sobe na porta definida em `PORT` (padrão `3000`).
 
+### Abrir o banco com Prisma Studio
+
+Para consultar os dados do PostgreSQL do backend em uma interface visual:
+
+```bash
+cd backend
+npm run db:studio
+```
+
+Abra [http://localhost:5555](http://localhost:5555) no navegador. Mantenha o comando em execução enquanto usa o Prisma Studio e pressione `Ctrl+C` para encerrá-lo.
+
+O Prisma Studio mostra os dados do PostgreSQL, como usuários. Os lançamentos financeiros do app ficam no SQLite local (`finances.db`) e não aparecem nessa ferramenta.
+
 ### Variáveis de ambiente relevantes
 
-| Variável | Descrição |
-|---|---|
-| `DATABASE_URL` | Connection string do PostgreSQL |
-| `JWT_PRIVATE_KEY_BASE64` | Chave privada RSA-4096 em Base64 (gerada pelo script) |
-| `JWT_PUBLIC_KEY_BASE64` | Chave pública RSA-4096 em Base64 (gerada pelo script) |
-| `FIELD_ENCRYPTION_KEY` | 64 hex chars (32 bytes) para AES-256-GCM |
-| `FIELD_HMAC_KEY` | 64 hex chars (32 bytes) para índices HMAC |
-| `CORS_ORIGIN` | Origem permitida pelo CORS (ex.: `http://localhost:8081`) |
-| `PORT` | Porta do servidor (padrão `3000`) |
+| Variável                 | Descrição                                                 |
+| ------------------------ | --------------------------------------------------------- |
+| `DATABASE_URL`           | Connection string do PostgreSQL                           |
+| `JWT_PRIVATE_KEY_BASE64` | Chave privada RSA-4096 em Base64 (gerada pelo script)     |
+| `JWT_PUBLIC_KEY_BASE64`  | Chave pública RSA-4096 em Base64 (gerada pelo script)     |
+| `FIELD_ENCRYPTION_KEY`   | 64 hex chars (32 bytes) para AES-256-GCM                  |
+| `FIELD_HMAC_KEY`         | 64 hex chars (32 bytes) para índices HMAC                 |
+| `CORS_ORIGIN`            | Origem permitida pelo CORS (ex.: `http://localhost:8081`) |
+| `PORT`                   | Porta do servidor (padrão `3000`)                         |
 
 ### Rotas disponíveis
 
-| Método | Rota | Descrição |
-|---|---|---|
-| `POST` | `/auth/register` | Cria uma conta |
-| `POST` | `/auth/login` | Autentica e retorna tokens |
-| `POST` | `/auth/refresh` | Renova o access token |
-| `POST` | `/auth/logout` | Revoga o refresh token |
-| `GET` | `/users/me` | Dados do usuário autenticado |
-| `GET` | `/health` | Liveness probe |
+| Método | Rota             | Descrição                    |
+| ------ | ---------------- | ---------------------------- |
+| `POST` | `/auth/register` | Cria uma conta               |
+| `POST` | `/auth/login`    | Autentica e retorna tokens   |
+| `POST` | `/auth/refresh`  | Renova o access token        |
+| `POST` | `/auth/logout`   | Revoga o refresh token       |
+| `GET`  | `/users/me`      | Dados do usuário autenticado |
+| `GET`  | `/health`        | Liveness probe               |
 
 ### Conectar o app ao backend
 
@@ -279,91 +356,7 @@ npm run db:generate
 
 A migration gerada deve ser revisada e mantida no repositório. Não remova migrations já aplicadas em dispositivos existentes.
 
-## Funcionalidades
-
-### Dashboard
-
-A tela inicial mostra:
-
-- Saldo atual.
-- Total de receitas.
-- Total de despesas.
-- Gráfico mensal do balanço.
-- Últimos lançamentos.
-- Atualização automática ao voltar para a tela.
-
-### Receitas e despesas
-
-Na tab **Lançamentos**, é possível criar:
-
-- Receita.
-- Despesa.
-- Título obrigatório.
-- Descrição opcional.
-- Valor em reais, armazenado internamente em centavos.
-- Categoria.
-- Data do lançamento.
-- Estabelecimento para despesas.
-- Forma de pagamento.
-- Cartão utilizado.
-- Modalidade de débito ou crédito.
-- Vencimento da fatura para cartão de crédito.
-- Cartões disponíveis gerenciados dentro da tab **Cadastros**.
-- Categorias disponíveis gerenciadas dentro da tab **Cadastros**.
-
-A validação condicional é feita com Zod. Campos que não se aplicam ao tipo de lançamento são ignorados antes da gravação.
-
-### Detalhes, edição e exclusão
-
-Cada lançamento da lista é clicável. A tela de detalhes permite:
-
-- Consultar todos os dados do lançamento.
-- Identificar uma despesa recorrente.
-- Identificar a parcela atual de um parcelamento.
-- Editar o lançamento.
-- Excluir o lançamento após confirmação.
-
-### Lançamentos recorrentes
-
-Uma despesa ou receita pode ser marcada como recorrente mensal. Exemplos: aluguel, Netflix, academia ou salário.
-
-Quando isso acontece:
-
-1. O lançamento inicial é salvo.
-2. Uma regra é criada em `recurring_expense_rules`, com o tipo `income` ou `expense`.
-3. O app gera ocorrências vencidas automaticamente na inicialização e ao atualizar o dashboard.
-4. A geração é idempotente e não duplica a mesma ocorrência.
-5. O dia escolhido é preservado entre meses, inclusive depois de meses com menos dias.
-
-As próximas projeções de uma recorrência são calculadas virtualmente. Assim, alterações feitas na regra podem aparecer imediatamente sem criar registros antecipados desatualizados.
-
-Receitas recorrentes seguem o mesmo fluxo das despesas, mas entram no saldo como receitas. Isso permite cadastrar, por exemplo, um salário mensal.
-
-### Parcelamentos
-
-Parcelamentos estão disponíveis somente para despesas pagas com cartão de crédito.
-
-- É possível informar de 1 a 60 parcelas.
-- O app mostra uma prévia do valor da parcela.
-- Cada parcela é criada com sua própria data e vencimento.
-- O total é dividido em centavos sem perda de arredondamento.
-- As parcelas recebem um grupo comum e identificadores como `1/10`, `2/10` e `3/10`.
-- Uma despesa recorrente não pode ser parcelada.
-
-### Projeções
-
-A tab **Projeções** mostra um mês por vez, começando no mês atual e limitada ao ano atual. O usuário pode navegar entre os meses disponíveis usando as setas.
-
-A tela combina parcelas já materializadas com ocorrências virtuais das regras recorrentes e apresenta:
-
-- Saldo projetado do período.
-- Receitas e despesas futuras.
-- Gráfico em barras comparando receitas e despesas do mês.
-- Total de despesas do mês.
-- Identificação de parcelas e recorrências.
-- Acesso aos detalhes dos lançamentos que já existem no banco.
-
-### Bloqueio biométrico
+## Bloqueio biométrico
 
 O app usa `expo-local-authentication` para proteger o acesso aos dados financeiros.
 
