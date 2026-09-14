@@ -4,14 +4,12 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useRef,
   useState,
   type PropsWithChildren,
 } from 'react';
 
-import { apiLogin, apiLogout, apiRefresh, apiRegister } from '@/src/api/auth';
-
 const REFRESH_TOKEN_KEY = 'refresh-token';
+const OFFLINE_SESSION_TOKEN = 'offline-local-session';
 
 interface AuthContextValue {
   accessToken: string | null;
@@ -25,10 +23,8 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: PropsWithChildren) {
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  // Prevent double-refresh in React StrictMode double-mount
-  const initializing = useRef(false);
+  const [accessToken, setAccessToken] = useState<string | null>(OFFLINE_SESSION_TOKEN);
+  const [isLoading, setIsLoading] = useState(false);
 
   const saveTokens = useCallback(async (pair: { accessToken: string; refreshToken: string }) => {
     setAccessToken(pair.accessToken);
@@ -40,46 +36,49 @@ export function AuthProvider({ children }: PropsWithChildren) {
     await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY).catch(() => undefined);
   }, []);
 
-  useEffect(() => {
-    if (initializing.current) return;
-    initializing.current = true;
+  const setOfflineSession = useCallback(async () => {
+    setAccessToken(OFFLINE_SESSION_TOKEN);
+    await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, OFFLINE_SESSION_TOKEN).catch(() => undefined);
+  }, []);
 
-    async function tryRestoreSession() {
+  useEffect(() => {
+    async function restoreOfflineSession() {
       try {
         const stored = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
-        if (stored) {
-          const pair = await apiRefresh(stored);
-          await saveTokens(pair);
+
+        if (stored === OFFLINE_SESSION_TOKEN) {
+          setAccessToken(OFFLINE_SESSION_TOKEN);
+          return;
+        }
+
+        if (!stored) {
+          await setOfflineSession();
         }
       } catch {
-        await clearTokens();
+        await setOfflineSession();
       } finally {
         setIsLoading(false);
       }
     }
 
-    void tryRestoreSession();
-  }, [saveTokens, clearTokens]);
+    void restoreOfflineSession();
+  }, [setOfflineSession]);
 
   const login = useCallback(
-    async (email: string, password: string) => {
-      const pair = await apiLogin(email, password);
-      await saveTokens(pair);
+    async (_email: string, _password: string) => {
+      await setOfflineSession();
     },
-    [saveTokens],
+    [setOfflineSession],
   );
 
   const register = useCallback(
-    async (email: string, password: string) => {
-      const pair = await apiRegister(email, password);
-      await saveTokens(pair);
+    async (_email: string, _password: string) => {
+      await setOfflineSession();
     },
-    [saveTokens],
+    [setOfflineSession],
   );
 
   const logout = useCallback(async () => {
-    const stored = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY).catch(() => null);
-    if (stored) await apiLogout(stored);
     await clearTokens();
   }, [clearTokens]);
 

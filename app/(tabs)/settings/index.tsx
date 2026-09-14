@@ -1,3 +1,4 @@
+import { SymbolView } from 'expo-symbols';
 import { router } from 'expo-router';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -65,8 +66,16 @@ export default function SettingsHomeScreen() {
             { backgroundColor: colors.surface, borderColor: colors.border },
             pressed && styles.pressed,
           ]}>
-          <View style={[styles.icon, { backgroundColor: colors.primary }]}>
-            <Text style={[styles.iconText, { color: colors.onStrong }]}>▣</Text>
+          <View style={[styles.icon, { backgroundColor: colors.primaryStrong }]}>
+            <SymbolView
+              name={{
+                ios: 'creditcard.fill',
+                android: 'credit_card',
+                web: 'credit_card',
+              }}
+              size={18}
+              tintColor={colors.onStrong}
+            />
           </View>
           <View style={styles.optionContent}>
             <Text style={[styles.optionTitle, { color: colors.text }]}>Cartões</Text>
@@ -82,8 +91,16 @@ export default function SettingsHomeScreen() {
             { backgroundColor: colors.surface, borderColor: colors.border },
             pressed && styles.pressed,
           ]}>
-          <View style={[styles.icon, { backgroundColor: colors.primary }]}>
-            <Text style={[styles.iconText, { color: colors.onStrong }]}>•</Text>
+          <View style={[styles.icon, { backgroundColor: colors.primaryStrong }]}>
+            <SymbolView
+              name={{
+                ios: 'tag.fill',
+                android: 'sell',
+                web: 'sell',
+              }}
+              size={18}
+              tintColor={colors.onStrong}
+            />
           </View>
           <View style={styles.optionContent}>
             <Text style={[styles.optionTitle, { color: colors.text }]}>Categorias</Text>
@@ -101,7 +118,15 @@ export default function SettingsHomeScreen() {
             pressed && styles.pressed,
           ]}>
           <View style={[styles.icon, { backgroundColor: colors.expenseSurface }]}>
-            <Text style={[styles.iconText, { color: colors.expense }]}>⎋</Text>
+            <SymbolView
+              name={{
+                ios: 'rectangle.portrait.and.arrow.right',
+                android: 'logout',
+                web: 'logout',
+              }}
+              size={18}
+              tintColor={colors.expense}
+            />
           </View>
           <View style={styles.optionContent}>
             <Text style={[styles.optionTitle, { color: colors.expense }]}>Sair da conta</Text>

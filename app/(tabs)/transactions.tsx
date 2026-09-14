@@ -11,6 +11,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TransactionList } from '@/src/components/dashboard/TransactionList';
+import { LoadingState } from '@/src/components/ui/LoadingState';
+import { OfflineBadge } from '@/src/components/ui/OfflineBadge';
 import { ThemeToggle } from '@/src/components/ui/ThemeToggle';
 import { listTransactions } from '@/src/db/queries/transactions';
 import { useDatabase } from '@/src/db/provider';
@@ -52,6 +54,7 @@ export default function TransactionsScreen() {
           <View>
             <Text style={[styles.eyebrow, { color: colors.primary }]}>HISTÓRICO</Text>
             <Text style={[styles.title, { color: colors.text }]}>Lançamentos</Text>
+            <OfflineBadge />
           </View>
           <ThemeToggle />
         </View>
@@ -80,9 +83,7 @@ export default function TransactionsScreen() {
       </View>
 
       {isLoading ? (
-        <View style={styles.loading}>
-          <ActivityIndicator color={colors.primary} />
-        </View>
+        <LoadingState label="Carregando lançamentos..." />
       ) : (
         <ScrollView
           contentContainerStyle={styles.content}

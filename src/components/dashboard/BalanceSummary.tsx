@@ -18,7 +18,7 @@ export function BalanceSummary({ summary }: BalanceSummaryProps) {
         numberOfLines={1}
         adjustsFontSizeToFit
         minimumFontScale={0.65}
-        style={[styles.balance, { color: colors.onStrong }]}>
+        style={[styles.balance, { color: colors.balanceText }]}>
         {formatCurrency(summary.balanceInCents)}
       </Text>
 
@@ -29,7 +29,7 @@ export function BalanceSummary({ summary }: BalanceSummaryProps) {
           <View style={[styles.indicator, { backgroundColor: colors.income }]} />
           <View>
             <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Receitas</Text>
-            <Text style={[styles.metricValue, { color: colors.onStrong }]}>
+            <Text style={[styles.metricValue, { color: colors.balanceText }]}>
               {formatCurrency(summary.incomeInCents)}
             </Text>
           </View>
@@ -39,7 +39,7 @@ export function BalanceSummary({ summary }: BalanceSummaryProps) {
           <View style={[styles.indicator, { backgroundColor: colors.expense }]} />
           <View>
             <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Despesas</Text>
-            <Text style={[styles.metricValue, { color: colors.onStrong }]}>
+            <Text style={[styles.metricValue, { color: colors.balanceText }]}>
               {formatCurrency(summary.expenseInCents)}
             </Text>
           </View>

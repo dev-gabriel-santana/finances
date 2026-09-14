@@ -23,6 +23,8 @@ function baseTx(overrides: Partial<typeof transactions.$inferInsert> = {}) {
     amountInCents: 5000,
     category: "Alimentação",
     transactionDate: "2025-01-15",
+    createdAt: NOW,
+    updatedAt: NOW,
     ...overrides,
   } satisfies typeof transactions.$inferInsert;
 }
@@ -33,9 +35,13 @@ function baseTx(overrides: Partial<typeof transactions.$inferInsert> = {}) {
 
 describe("insertTransaction", () => {
   let testDb: TestDb;
-  beforeAll(async () => { testDb = await createTestDb(); });
+  beforeAll(async () => {
+    testDb = await createTestDb();
+  });
   afterAll(() => testDb.cleanup());
-  afterEach(async () => { await testDb.db.delete(transactions); });
+  afterEach(async () => {
+    await testDb.db.delete(transactions);
+  });
 
   it("insere e retorna a transação com id e timestamps", async () => {
     const tx = await insertTransaction(testDb.db, baseTx());
@@ -53,9 +59,13 @@ describe("insertTransaction", () => {
 
 describe("getTransactionById", () => {
   let testDb: TestDb;
-  beforeAll(async () => { testDb = await createTestDb(); });
+  beforeAll(async () => {
+    testDb = await createTestDb();
+  });
   afterAll(() => testDb.cleanup());
-  afterEach(async () => { await testDb.db.delete(transactions); });
+  afterEach(async () => {
+    await testDb.db.delete(transactions);
+  });
 
   it("retorna a transação existente pelo id", async () => {
     const inserted = await insertTransaction(testDb.db, baseTx());
@@ -77,7 +87,9 @@ describe("getTransactionById", () => {
 
 describe("updateTransaction", () => {
   let testDb: TestDb;
-  beforeAll(async () => { testDb = await createTestDb(); });
+  beforeAll(async () => {
+    testDb = await createTestDb();
+  });
   afterAll(() => testDb.cleanup());
   afterEach(async () => {
     await testDb.db.delete(transactions);
@@ -85,16 +97,21 @@ describe("updateTransaction", () => {
   });
 
   it("atualiza campos da transação", async () => {
-    const tx = await insertTransaction(testDb.db, baseTx({ amountInCents: 1000 }));
-    const updated = await updateTransaction(testDb.db, tx.id, { amountInCents: 2000 });
+    const tx = await insertTransaction(
+      testDb.db,
+      baseTx({ amountInCents: 1000 }),
+    );
+    const updated = await updateTransaction(testDb.db, tx.id, {
+      amountInCents: 2000,
+    });
 
     expect(updated.amountInCents).toBe(2000);
   });
 
   it("lança erro para id inexistente", async () => {
-    await expect(updateTransaction(testDb.db, 99999, { title: "X" })).rejects.toThrow(
-      "Transaction not found",
-    );
+    await expect(
+      updateTransaction(testDb.db, 99999, { title: "X" }),
+    ).rejects.toThrow("Transaction not found");
   });
 
   it("também atualiza a regra recorrente vinculada", async () => {
@@ -113,7 +130,11 @@ describe("updateTransaction", () => {
 
     const tx = await insertTransaction(
       testDb.db,
-      baseTx({ recurringRuleId: rule!.id, title: "Aluguel", amountInCents: 100000 }),
+      baseTx({
+        recurringRuleId: rule!.id,
+        title: "Aluguel",
+        amountInCents: 100000,
+      }),
     );
 
     await updateTransaction(testDb.db, tx.id, {
@@ -137,7 +158,9 @@ describe("updateTransaction", () => {
 
 describe("deleteTransaction", () => {
   let testDb: TestDb;
-  beforeAll(async () => { testDb = await createTestDb(); });
+  beforeAll(async () => {
+    testDb = await createTestDb();
+  });
   afterAll(() => testDb.cleanup());
   afterEach(async () => {
     await testDb.db.delete(transactions);
@@ -229,7 +252,9 @@ describe("deleteTransaction", () => {
 
 describe("clearAllTransactions", () => {
   let testDb: TestDb;
-  beforeAll(async () => { testDb = await createTestDb(); });
+  beforeAll(async () => {
+    testDb = await createTestDb();
+  });
   afterAll(() => testDb.cleanup());
 
   it("remove todas as transações e regras recorrentes", async () => {
@@ -265,13 +290,23 @@ describe("clearAllTransactions", () => {
 
 describe("listTransactions", () => {
   let testDb: TestDb;
-  beforeAll(async () => { testDb = await createTestDb(); });
+  beforeAll(async () => {
+    testDb = await createTestDb();
+  });
   afterAll(() => testDb.cleanup());
-  afterEach(async () => { await testDb.db.delete(transactions); });
+  afterEach(async () => {
+    await testDb.db.delete(transactions);
+  });
 
   it("retorna todos os lançamentos ordenados por data desc", async () => {
-    await insertTransaction(testDb.db, baseTx({ transactionDate: "2025-01-10" }));
-    await insertTransaction(testDb.db, baseTx({ transactionDate: "2025-01-20" }));
+    await insertTransaction(
+      testDb.db,
+      baseTx({ transactionDate: "2025-01-10" }),
+    );
+    await insertTransaction(
+      testDb.db,
+      baseTx({ transactionDate: "2025-01-20" }),
+    );
 
     const rows = await listTransactions(testDb.db);
     expect(rows[0]!.transactionDate).toBe("2025-01-20");
@@ -303,9 +338,13 @@ describe("listTransactions", () => {
 
 describe("getBalanceSummary", () => {
   let testDb: TestDb;
-  beforeAll(async () => { testDb = await createTestDb(); });
+  beforeAll(async () => {
+    testDb = await createTestDb();
+  });
   afterAll(() => testDb.cleanup());
-  afterEach(async () => { await testDb.db.delete(transactions); });
+  afterEach(async () => {
+    await testDb.db.delete(transactions);
+  });
 
   it("retorna zeros quando não há lançamentos", async () => {
     const summary = await getBalanceSummary(testDb.db);
@@ -316,8 +355,14 @@ describe("getBalanceSummary", () => {
   });
 
   it("calcula income, expense e balance corretamente", async () => {
-    await insertTransaction(testDb.db, baseTx({ type: "income", amountInCents: 100000 }));
-    await insertTransaction(testDb.db, baseTx({ type: "expense", amountInCents: 30000 }));
+    await insertTransaction(
+      testDb.db,
+      baseTx({ type: "income", amountInCents: 100000 }),
+    );
+    await insertTransaction(
+      testDb.db,
+      baseTx({ type: "expense", amountInCents: 30000 }),
+    );
 
     const summary = await getBalanceSummary(testDb.db);
 
@@ -333,22 +378,38 @@ describe("getBalanceSummary", () => {
 
 describe("getMonthlyBalanceHistory", () => {
   let testDb: TestDb;
-  beforeAll(async () => { testDb = await createTestDb(); });
+  beforeAll(async () => {
+    testDb = await createTestDb();
+  });
   afterAll(() => testDb.cleanup());
-  afterEach(async () => { await testDb.db.delete(transactions); });
+  afterEach(async () => {
+    await testDb.db.delete(transactions);
+  });
 
   it("agrupa por período mensal", async () => {
     await insertTransaction(
       testDb.db,
-      baseTx({ type: "income", amountInCents: 50000, transactionDate: "2025-01-10" }),
+      baseTx({
+        type: "income",
+        amountInCents: 50000,
+        transactionDate: "2025-01-10",
+      }),
     );
     await insertTransaction(
       testDb.db,
-      baseTx({ type: "expense", amountInCents: 20000, transactionDate: "2025-01-20" }),
+      baseTx({
+        type: "expense",
+        amountInCents: 20000,
+        transactionDate: "2025-01-20",
+      }),
     );
     await insertTransaction(
       testDb.db,
-      baseTx({ type: "income", amountInCents: 30000, transactionDate: "2025-02-05" }),
+      baseTx({
+        type: "income",
+        amountInCents: 30000,
+        transactionDate: "2025-02-05",
+      }),
     );
 
     const history = await getMonthlyBalanceHistory(testDb.db);
@@ -364,9 +425,18 @@ describe("getMonthlyBalanceHistory", () => {
   });
 
   it("filtra por startDate e endDate", async () => {
-    await insertTransaction(testDb.db, baseTx({ transactionDate: "2024-12-01" }));
-    await insertTransaction(testDb.db, baseTx({ transactionDate: "2025-01-15" }));
-    await insertTransaction(testDb.db, baseTx({ transactionDate: "2025-03-01" }));
+    await insertTransaction(
+      testDb.db,
+      baseTx({ transactionDate: "2024-12-01" }),
+    );
+    await insertTransaction(
+      testDb.db,
+      baseTx({ transactionDate: "2025-01-15" }),
+    );
+    await insertTransaction(
+      testDb.db,
+      baseTx({ transactionDate: "2025-03-01" }),
+    );
 
     const history = await getMonthlyBalanceHistory(testDb.db, {
       startDate: "2025-01-01",
