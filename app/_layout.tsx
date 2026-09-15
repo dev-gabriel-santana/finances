@@ -26,7 +26,6 @@ import {
   INITIAL_BALANCE_ONBOARDING_DONE_KEY,
 } from "@/src/constants/storageKeys";
 import { DatabaseProvider } from "@/src/db/provider";
-import { BiometricGate } from "@/src/security/BiometricGate";
 import { AppThemeProvider, useAppTheme } from "@/src/theme/theme";
 import { formatCurrency } from "@/src/utils/currency";
 
@@ -66,11 +65,11 @@ export default function RootLayout() {
   return (
     <AppThemeProvider>
       <AuthProvider>
-        <BiometricGate>
-          <DatabaseProvider>
-            <RootLayoutNav />
-          </DatabaseProvider>
-        </BiometricGate>
+        {/* <BiometricGate> */}
+        <DatabaseProvider>
+          <RootLayoutNav />
+        </DatabaseProvider>
+        {/* </BiometricGate> */}
       </AuthProvider>
     </AppThemeProvider>
   );
