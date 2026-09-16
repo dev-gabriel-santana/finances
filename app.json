@@ -12,12 +12,7 @@
       "bundleIdentifier": "com.gsantana.financas"
     },
     "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#16211D",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
-      },
+      "icon": "./assets/images/icon.png",
       "predictiveBackGestureEnabled": false,
       "package": "com.gsantana.financas"
     },
