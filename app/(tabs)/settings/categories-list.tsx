@@ -2,20 +2,21 @@ import { useFocusEffect } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useCallback, useState } from "react";
 import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    Alert,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { LoadingState } from "@/src/components/ui/LoadingState";
+import { useSnackbar } from "@/src/components/ui/Snackbar";
 import { useDatabase } from "@/src/db/provider";
 import {
-  listCategories,
-  removeCategory,
+    listCategories,
+    removeCategory,
 } from "@/src/db/queries/cards-categories";
 import type { Category } from "@/src/db/schema";
 import { useAppTheme } from "@/src/theme/theme";
@@ -71,6 +72,7 @@ const getCategoryIconConfig = (icon?: string | null) => {
 export default function CategoriesListScreen() {
   const database = useDatabase();
   const { colors } = useAppTheme();
+  const { showSuccess } = useSnackbar();
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -104,6 +106,7 @@ export default function CategoriesListScreen() {
             try {
               await removeCategory(database, category.id);
               await loadCategories();
+              showSuccess("Categoria removida com sucesso");
             } catch {
               Alert.alert("Não foi possível remover", "Tente novamente.");
             }

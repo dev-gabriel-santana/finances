@@ -2,16 +2,24 @@ import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import {
+  clearAllData,
   clearAllTransactions,
   deleteTransaction,
   getBalanceSummary,
+  getExpenseTotalsByCard,
+  getExpenseTotalsByCategory,
   getMonthlyBalanceHistory,
   getTransactionById,
   insertTransaction,
   listTransactions,
   updateTransaction,
 } from "../queries/transactions";
-import { recurringExpenseRules, transactions } from "../schema";
+import {
+  cards,
+  categories,
+  recurringExpenseRules,
+  transactions,
+} from "../schema";
 import { createTestDb, type TestDb } from "./helpers";
 
 const NOW = new Date().toISOString();
@@ -284,6 +292,39 @@ describe("clearAllTransactions", () => {
   });
 });
 
+describe("clearAllData", () => {
+  let testDb: TestDb;
+  beforeAll(async () => {
+    testDb = await createTestDb();
+  });
+  afterAll(() => testDb.cleanup());
+
+  it("remove lançamentos, recorrências, cartões e categorias", async () => {
+    await testDb.db.insert(cards).values({
+      name: "Nubank",
+      brand: "Visa",
+      closingDay: 10,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    await testDb.db.insert(categories).values({
+      name: "Casa",
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    await insertTransaction(testDb.db, baseTx());
+
+    await clearAllData(testDb.db);
+
+    expect(await testDb.db.select().from(transactions)).toHaveLength(0);
+    expect(await testDb.db.select().from(recurringExpenseRules)).toHaveLength(
+      0,
+    );
+    expect(await testDb.db.select().from(cards)).toHaveLength(0);
+    expect(await testDb.db.select().from(categories)).toHaveLength(0);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // listTransactions
 // ---------------------------------------------------------------------------
@@ -445,5 +486,208 @@ describe("getMonthlyBalanceHistory", () => {
 
     expect(history).toHaveLength(1);
     expect(history[0]!.period).toBe("2025-01");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getExpenseTotalsByCategory
+// ---------------------------------------------------------------------------
+
+describe("getExpenseTotalsByCategory", () => {
+  let testDb: TestDb;
+  beforeAll(async () => {
+    testDb = await createTestDb();
+  });
+  afterAll(() => testDb.cleanup());
+  afterEach(async () => {
+    await testDb.db.delete(transactions);
+  });
+
+  it("retorna a lista vazia quando não há despesas", async () => {
+    const totals = await getExpenseTotalsByCategory(testDb.db);
+
+    expect(totals).toEqual([]);
+  });
+
+  it("soma despesas por categoria e ordena do maior para o menor", async () => {
+    await insertTransaction(
+      testDb.db,
+      baseTx({ category: "Alimentação", amountInCents: 12000 }),
+    );
+    await insertTransaction(
+      testDb.db,
+      baseTx({ category: "Moradia", amountInCents: 50000 }),
+    );
+    await insertTransaction(
+      testDb.db,
+      baseTx({ category: "Alimentação", amountInCents: 8000 }),
+    );
+    await insertTransaction(
+      testDb.db,
+      baseTx({ type: "income", category: "Salário", amountInCents: 100000 }),
+    );
+
+    const totals = await getExpenseTotalsByCategory(testDb.db);
+
+    expect(totals).toEqual([
+      { category: "Moradia", amountInCents: 50000 },
+      { category: "Alimentação", amountInCents: 20000 },
+    ]);
+  });
+
+  it("filtra pelas datas informadas", async () => {
+    await insertTransaction(
+      testDb.db,
+      baseTx({ transactionDate: "2025-01-31", amountInCents: 1000 }),
+    );
+    await insertTransaction(
+      testDb.db,
+      baseTx({ transactionDate: "2025-02-01", amountInCents: 2000 }),
+    );
+    await insertTransaction(
+      testDb.db,
+      baseTx({ transactionDate: "2025-03-01", amountInCents: 3000 }),
+    );
+
+    const totals = await getExpenseTotalsByCategory(testDb.db, {
+      startDate: "2025-02-01",
+      endDate: "2025-02-28",
+    });
+
+    expect(totals).toEqual([{ category: "Alimentação", amountInCents: 2000 }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getExpenseTotalsByCard
+// ---------------------------------------------------------------------------
+
+describe("getExpenseTotalsByCard", () => {
+  let testDb: TestDb;
+  beforeAll(async () => {
+    testDb = await createTestDb();
+  });
+  afterAll(() => testDb.cleanup());
+  afterEach(async () => {
+    await testDb.db.delete(transactions);
+    await testDb.db.delete(cards);
+  });
+
+  it("agrupa despesas por cartão, conta lançamentos e ordena pelo total", async () => {
+    const [firstCard, secondCard] = await testDb.db
+      .insert(cards)
+      .values([
+        {
+          name: "Nubank",
+          brand: "Visa",
+          closingDay: 10,
+          createdAt: NOW,
+          updatedAt: NOW,
+        },
+        {
+          name: "Itaú",
+          brand: "Mastercard",
+          closingDay: 15,
+          createdAt: NOW,
+          updatedAt: NOW,
+        },
+      ])
+      .returning();
+
+    await insertTransaction(
+      testDb.db,
+      baseTx({
+        paymentMethod: "card",
+        cardId: String(firstCard!.id),
+        amountInCents: 12000,
+      }),
+    );
+    await insertTransaction(
+      testDb.db,
+      baseTx({
+        paymentMethod: "card",
+        cardId: String(firstCard!.id),
+        amountInCents: 8000,
+      }),
+    );
+    await insertTransaction(
+      testDb.db,
+      baseTx({
+        paymentMethod: "card",
+        cardId: String(secondCard!.id),
+        amountInCents: 50000,
+      }),
+    );
+    await insertTransaction(
+      testDb.db,
+      baseTx({
+        type: "income",
+        paymentMethod: "card",
+        cardId: String(secondCard!.id),
+        amountInCents: 90000,
+      }),
+    );
+
+    const totals = await getExpenseTotalsByCard(testDb.db);
+
+    expect(totals).toEqual([
+      {
+        cardId: secondCard!.id,
+        cardName: "Itaú",
+        cardBrand: "Mastercard",
+        amountInCents: 50000,
+        transactionCount: 1,
+      },
+      {
+        cardId: firstCard!.id,
+        cardName: "Nubank",
+        cardBrand: "Visa",
+        amountInCents: 20000,
+        transactionCount: 2,
+      },
+    ]);
+  });
+
+  it("mantém cartão sem despesas e filtra o período", async () => {
+    const [card] = await testDb.db
+      .insert(cards)
+      .values({
+        name: "Nubank",
+        brand: "Visa",
+        closingDay: 10,
+        createdAt: NOW,
+        updatedAt: NOW,
+      })
+      .returning();
+
+    await insertTransaction(
+      testDb.db,
+      baseTx({
+        paymentMethod: "card",
+        cardId: String(card!.id),
+        transactionDate: "2025-01-15",
+        amountInCents: 1000,
+      }),
+    );
+    await insertTransaction(
+      testDb.db,
+      baseTx({
+        paymentMethod: "card",
+        cardId: String(card!.id),
+        transactionDate: "2025-02-15",
+        amountInCents: 2000,
+      }),
+    );
+
+    const totals = await getExpenseTotalsByCard(testDb.db, {
+      startDate: "2025-02-01",
+      endDate: "2025-02-28",
+    });
+
+    expect(totals[0]).toMatchObject({
+      cardId: card!.id,
+      amountInCents: 2000,
+      transactionCount: 1,
+    });
   });
 });

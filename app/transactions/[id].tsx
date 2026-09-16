@@ -1,29 +1,30 @@
-import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useSnackbar } from "@/src/components/ui/Snackbar";
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { router, useLocalSearchParams } from "expo-router";
+import { useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+    ActivityIndicator,
+    Alert,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
-  cards,
-  getOptionLabel,
-  paymentMethods,
-  paymentModalities,
-} from '@/src/constants/transactions';
-import { deleteTransaction } from '@/src/db/queries/transactions';
-import { useDatabase } from '@/src/db/provider';
-import { useTransaction } from '@/src/hooks/useTransaction';
-import { useAppTheme, type ThemeColors } from '@/src/theme/theme';
-import { formatCurrency } from '@/src/utils/currency';
+    cards,
+    getOptionLabel,
+    paymentMethods,
+    paymentModalities,
+} from "@/src/constants/transactions";
+import { useDatabase } from "@/src/db/provider";
+import { deleteTransaction } from "@/src/db/queries/transactions";
+import { useTransaction } from "@/src/hooks/useTransaction";
+import { useAppTheme, type ThemeColors } from "@/src/theme/theme";
+import { formatCurrency } from "@/src/utils/currency";
 
 interface DetailRowProps {
   label: string;
@@ -34,9 +35,11 @@ interface DetailRowProps {
 function DetailRow({ label, value, colors }: DetailRowProps) {
   return (
     <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
-      <Text style={[styles.detailLabel, { color: colors.textMuted }]}>{label}</Text>
+      <Text style={[styles.detailLabel, { color: colors.textMuted }]}>
+        {label}
+      </Text>
       <Text style={[styles.detailValue, { color: colors.text }]}>
-        {value || 'Não informado'}
+        {value || "Não informado"}
       </Text>
     </View>
   );
@@ -52,6 +55,7 @@ export default function TransactionDetailScreen() {
   const { transaction, isLoading, error } = useTransaction(transactionId);
   const database = useDatabase();
   const { colors } = useAppTheme();
+  const { showSuccess } = useSnackbar();
   const [isDeleting, setIsDeleting] = useState(false);
 
   if (isLoading) {
@@ -66,25 +70,26 @@ export default function TransactionDetailScreen() {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
         <Text style={[styles.errorText, { color: colors.expense }]}>
-          {error?.message ?? 'Lançamento não encontrado'}
+          {error?.message ?? "Lançamento não encontrado"}
         </Text>
       </View>
     );
   }
 
-  const isIncome = transaction.type === 'income';
+  const isIncome = transaction.type === "income";
 
-  const handleDelete = async (mode: 'single' | 'series' = 'series') => {
+  const handleDelete = async (mode: "single" | "series" = "series") => {
     setIsDeleting(true);
 
     try {
       await deleteTransaction(database, transaction.id, mode);
-      router.replace('/(tabs)/transactions');
+      showSuccess("Lançamento excluído com sucesso");
+      router.replace("/(tabs)/transactions");
     } catch {
       setIsDeleting(false);
       Alert.alert(
-        'Não foi possível excluir',
-        'O lançamento não foi removido. Tente novamente.',
+        "Não foi possível excluir",
+        "O lançamento não foi removido. Tente novamente.",
       );
     }
   };
@@ -94,19 +99,19 @@ export default function TransactionDetailScreen() {
 
     if (isRecurring) {
       Alert.alert(
-        'Excluir lançamento recorrente?',
-        'Escolha se deseja remover apenas este mês ou toda a série recorrente.',
+        "Excluir lançamento recorrente?",
+        "Escolha se deseja remover apenas este mês ou toda a série recorrente.",
         [
-          { text: 'Cancelar', style: 'cancel' },
+          { text: "Cancelar", style: "cancel" },
           {
-            text: 'Só este mês',
-            style: 'destructive',
-            onPress: () => void handleDelete('single'),
+            text: "Só este mês",
+            style: "destructive",
+            onPress: () => void handleDelete("single"),
           },
           {
-            text: 'Toda a série',
-            style: 'destructive',
-            onPress: () => void handleDelete('series'),
+            text: "Toda a série",
+            style: "destructive",
+            onPress: () => void handleDelete("series"),
           },
         ],
       );
@@ -115,29 +120,36 @@ export default function TransactionDetailScreen() {
     }
 
     Alert.alert(
-      'Excluir lançamento?',
-      'Esta ação é permanente e não poderá ser desfeita.',
+      "Excluir lançamento?",
+      "Esta ação é permanente e não poderá ser desfeita.",
       [
-        { text: 'Cancelar', style: 'cancel' },
+        { text: "Cancelar", style: "cancel" },
         {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: () => void handleDelete('single'),
+          text: "Excluir",
+          style: "destructive",
+          onPress: () => void handleDelete("single"),
         },
       ],
     );
   };
 
   return (
-    <SafeAreaView edges={['bottom']} style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <SafeAreaView
+      edges={["bottom"]}
+      style={[styles.safeArea, { backgroundColor: colors.background }]}
+    >
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={[styles.hero, { backgroundColor: colors.balanceSurface }]}>
           <Text
             style={[
               styles.type,
               { color: isIncome ? colors.income : colors.expense },
-            ]}>
-            {isIncome ? 'RECEITA' : 'DESPESA'}
+            ]}
+          >
+            {isIncome ? "RECEITA" : "DESPESA"}
           </Text>
           <Text style={[styles.title, { color: colors.onStrong }]}>
             {transaction.title}
@@ -148,20 +160,31 @@ export default function TransactionDetailScreen() {
             style={[
               styles.amount,
               { color: isIncome ? colors.income : colors.expense },
-            ]}>
-            {isIncome ? '+' : '-'} {formatCurrency(transaction.amountInCents)}
+            ]}
+          >
+            {isIncome ? "+" : "-"} {formatCurrency(transaction.amountInCents)}
           </Text>
         </View>
 
         <View style={[styles.section, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Informações</Text>
-          <DetailRow colors={colors} label="Categoria" value={transaction.category} />
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Informações
+          </Text>
+          <DetailRow
+            colors={colors}
+            label="Categoria"
+            value={transaction.category}
+          />
           <DetailRow
             colors={colors}
             label="Data do lançamento"
             value={formatDate(transaction.transactionDate)}
           />
-          <DetailRow colors={colors} label="Descrição" value={transaction.description} />
+          <DetailRow
+            colors={colors}
+            label="Descrição"
+            value={transaction.description}
+          />
           {transaction.recurringRuleId ? (
             <DetailRow colors={colors} label="Recorrência" value="Mensal" />
           ) : null}
@@ -176,14 +199,20 @@ export default function TransactionDetailScreen() {
 
         {!isIncome ? (
           <View style={[styles.section, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Pagamento</Text>
-            <DetailRow colors={colors} label="Estabelecimento" value={transaction.merchant} />
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Pagamento
+            </Text>
+            <DetailRow
+              colors={colors}
+              label="Estabelecimento"
+              value={transaction.merchant}
+            />
             <DetailRow
               colors={colors}
               label="Forma de pagamento"
               value={getOptionLabel(paymentMethods, transaction.paymentMethod)}
             />
-            {transaction.paymentMethod === 'card' ? (
+            {transaction.paymentMethod === "card" ? (
               <>
                 <DetailRow
                   colors={colors}
@@ -193,7 +222,10 @@ export default function TransactionDetailScreen() {
                 <DetailRow
                   colors={colors}
                   label="Modalidade"
-                  value={getOptionLabel(paymentModalities, transaction.paymentModality)}
+                  value={getOptionLabel(
+                    paymentModalities,
+                    transaction.paymentModality,
+                  )}
                 />
               </>
             ) : null}
@@ -212,7 +244,7 @@ export default function TransactionDetailScreen() {
             disabled={isDeleting}
             onPress={() =>
               router.push({
-                pathname: '/transactions/[id]/edit',
+                pathname: "/transactions/[id]/edit",
                 params: { id: String(transaction.id) },
               })
             }
@@ -220,8 +252,11 @@ export default function TransactionDetailScreen() {
               styles.actionButton,
               { backgroundColor: colors.primaryStrong },
               (pressed || isDeleting) && styles.pressed,
-            ]}>
-            <Text style={[styles.actionText, { color: colors.onStrong }]}>Editar lançamento</Text>
+            ]}
+          >
+            <Text style={[styles.actionText, { color: colors.onStrong }]}>
+              Editar lançamento
+            </Text>
           </Pressable>
 
           <Pressable
@@ -233,11 +268,14 @@ export default function TransactionDetailScreen() {
               styles.deleteButton,
               { borderColor: colors.expense },
               (pressed || isDeleting) && styles.pressed,
-            ]}>
+            ]}
+          >
             {isDeleting ? (
               <ActivityIndicator color={colors.expense} />
             ) : (
-              <Text style={[styles.actionText, { color: colors.expense }]}>Excluir lançamento</Text>
+              <Text style={[styles.actionText, { color: colors.expense }]}>
+                Excluir lançamento
+              </Text>
             )}
           </Pressable>
         </View>
@@ -255,32 +293,32 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   centered: {
-    alignItems: 'center',
+    alignItems: "center",
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     padding: 24,
   },
   errorText: {
     fontSize: 14,
-    textAlign: 'center',
+    textAlign: "center",
   },
   hero: {
     paddingHorizontal: 22,
     paddingVertical: 28,
   },
   type: {
-    fontFamily: 'SpaceMono',
+    fontFamily: "SpaceMono",
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 0,
   },
   title: {
     fontSize: 22,
-    fontWeight: '700',
+    fontWeight: "700",
     marginTop: 6,
   },
   amount: {
-    fontFamily: 'SpaceMono',
+    fontFamily: "SpaceMono",
     fontSize: 29,
     marginTop: 14,
   },
@@ -290,7 +328,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
     marginBottom: 8,
   },
   detailRow: {
@@ -310,18 +348,18 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   actionButton: {
-    alignItems: 'center',
+    alignItems: "center",
     borderRadius: 6,
     height: 50,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   deleteButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     borderWidth: 1,
   },
   actionText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   pressed: {
     opacity: 0.7,

@@ -1,13 +1,13 @@
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -20,8 +20,27 @@ import { useAppTheme } from "@/src/theme/theme";
 
 export default function CategoriesScreen() {
   const { colors } = useAppTheme();
+  const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
   const { color, handleAdd, icon, isSaving, name, setColor, setIcon, setName } =
     useCreateCategory();
+
+  const handleSubmit = async () => {
+    const createdCategory = await handleAdd();
+
+    if (!createdCategory || !returnTo) {
+      return;
+    }
+
+    router.dismissTo({
+      pathname:
+        returnTo === "income"
+          ? "/transactions/income"
+          : "/transactions/expense",
+      params: {
+        createdCategory: createdCategory.name,
+      },
+    });
+  };
 
   return (
     <SafeAreaView
@@ -29,10 +48,11 @@ export default function CategoriesScreen() {
       style={[styles.safeArea, { backgroundColor: colors.background }]}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.flex}
       >
         <ScrollView
+          automaticallyAdjustKeyboardInsets
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -79,7 +99,7 @@ export default function CategoriesScreen() {
             <CategoryIconPicker onChange={setIcon} value={icon} />
             <Pressable
               disabled={isSaving}
-              onPress={() => void handleAdd()}
+              onPress={() => void handleSubmit()}
               style={({ pressed }) => [
                 styles.submitButton,
                 { backgroundColor: colors.primaryStrong },

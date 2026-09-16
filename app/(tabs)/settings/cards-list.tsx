@@ -2,16 +2,17 @@ import { useFocusEffect } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useCallback, useState } from "react";
 import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View
+    Alert,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { LoadingState } from "@/src/components/ui/LoadingState";
+import { useSnackbar } from "@/src/components/ui/Snackbar";
 import { useDatabase } from "@/src/db/provider";
 import { listCards, removeCard } from "@/src/db/queries/cards-categories";
 import type { Card } from "@/src/db/schema";
@@ -20,6 +21,7 @@ import { useAppTheme } from "@/src/theme/theme";
 export default function CardsListScreen() {
   const database = useDatabase();
   const { colors } = useAppTheme();
+  const { showSuccess } = useSnackbar();
   const [cards, setCards] = useState<Card[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -50,6 +52,7 @@ export default function CardsListScreen() {
           try {
             await removeCard(database, card.id);
             await loadCards();
+            showSuccess("Cartão removido com sucesso");
           } catch {
             Alert.alert("Não foi possível remover", "Tente novamente.");
           }

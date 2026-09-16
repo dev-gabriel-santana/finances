@@ -1,23 +1,25 @@
-import { format, startOfMonth } from 'date-fns';
-import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
+import { format, startOfMonth } from "date-fns";
+import { and, count, desc, eq, gte, lte, sql } from "drizzle-orm";
 
-import type { Database } from '../client';
+import type { Database } from "../client";
 import {
-  recurringExpenseRules,
-  transactions,
-  type NewTransaction,
-  type Transaction,
-  type TransactionType,
-} from '../schema';
+    cards,
+    categories,
+    recurringExpenseRules,
+    transactions,
+    type NewTransaction,
+    type Transaction,
+    type TransactionType,
+} from "../schema";
 
 export type CreateTransactionInput = Omit<
   NewTransaction,
-  'id' | 'createdAt' | 'updatedAt'
+  "id" | "createdAt" | "updatedAt"
 >;
 
 export type UpdateTransactionInput = Partial<CreateTransactionInput>;
 
-export type DeleteTransactionMode = 'single' | 'series';
+export type DeleteTransactionMode = "single" | "series";
 
 export interface ListTransactionsOptions {
   type?: TransactionType;
@@ -39,6 +41,24 @@ export interface BalanceHistoryOptions {
   endDate?: string;
 }
 
+export interface ExpenseTotalsOptions {
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface ExpenseTotalByCategory {
+  category: string;
+  amountInCents: number;
+}
+
+export interface ExpenseTotalByCard {
+  cardId: number;
+  cardName: string;
+  cardBrand: string;
+  amountInCents: number;
+  transactionCount: number;
+}
+
 export interface CurrentAccountPixAdjustment {
   incomeInCents: number;
   expenseInCents: number;
@@ -48,6 +68,9 @@ export interface CurrentAccountPixAdjustment {
 const incomeTotal = sql<number>`coalesce(sum(case when ${transactions.type} = 'income' then ${transactions.amountInCents} else 0 end), 0)`;
 const expenseTotal = sql<number>`coalesce(sum(case when ${transactions.type} = 'expense' then ${transactions.amountInCents} else 0 end), 0)`;
 const balanceTotal = sql<number>`coalesce(sum(case when ${transactions.type} = 'income' then ${transactions.amountInCents} else -${transactions.amountInCents} end), 0)`;
+const expenseCategoryTotal = sql<number>`coalesce(sum(${transactions.amountInCents}), 0)`;
+const expenseCardTotal = sql<number>`coalesce(sum(${transactions.amountInCents}), 0)`;
+const cardIdAsText = sql<string>`cast(${cards.id} as text)`;
 
 export async function insertTransaction(
   database: Database,
@@ -60,7 +83,7 @@ export async function insertTransaction(
     .returning();
 
   if (!created) {
-    throw new Error('Transaction could not be created');
+    throw new Error("Transaction could not be created");
   }
 
   return created;
@@ -92,7 +115,7 @@ export async function updateTransaction(
       .limit(1);
 
     if (!current) {
-      throw new Error('Transaction not found');
+      throw new Error("Transaction not found");
     }
 
     const now = new Date().toISOString();
@@ -123,7 +146,7 @@ export async function updateTransaction(
   });
 
   if (!updated) {
-    throw new Error('Transaction not found');
+    throw new Error("Transaction not found");
   }
 
   return updated;
@@ -132,20 +155,23 @@ export async function updateTransaction(
 export async function deleteTransaction(
   database: Database,
   id: number,
-  mode: DeleteTransactionMode = 'series',
+  mode: DeleteTransactionMode = "series",
 ): Promise<void> {
   await database.transaction(async (databaseTransaction) => {
     const [current] = await databaseTransaction
-      .select({ id: transactions.id, recurringRuleId: transactions.recurringRuleId })
+      .select({
+        id: transactions.id,
+        recurringRuleId: transactions.recurringRuleId,
+      })
       .from(transactions)
       .where(eq(transactions.id, id))
       .limit(1);
 
     if (!current) {
-      throw new Error('Transaction not found');
+      throw new Error("Transaction not found");
     }
 
-    if (current.recurringRuleId && mode === 'series') {
+    if (current.recurringRuleId && mode === "series") {
       await databaseTransaction
         .delete(transactions)
         .where(eq(transactions.recurringRuleId, current.recurringRuleId));
@@ -167,6 +193,15 @@ export async function clearAllTransactions(database: Database): Promise<void> {
   await database.transaction(async (databaseTransaction) => {
     await databaseTransaction.delete(transactions);
     await databaseTransaction.delete(recurringExpenseRules);
+  });
+}
+
+export async function clearAllData(database: Database): Promise<void> {
+  await database.transaction(async (databaseTransaction) => {
+    await databaseTransaction.delete(transactions);
+    await databaseTransaction.delete(recurringExpenseRules);
+    await databaseTransaction.delete(cards);
+    await databaseTransaction.delete(categories);
   });
 }
 
@@ -192,6 +227,23 @@ export async function listTransactions(
     .limit(limit);
 }
 
+export async function listExpenseTransactionsByCard(
+  database: Database,
+  cardId: number,
+): Promise<Transaction[]> {
+  return database
+    .select()
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.type, "expense"),
+        eq(transactions.paymentMethod, "card"),
+        eq(transactions.cardId, String(cardId)),
+      ),
+    )
+    .orderBy(desc(transactions.transactionDate), desc(transactions.id));
+}
+
 export async function getBalanceSummary(
   database: Database,
 ): Promise<BalanceSummary> {
@@ -203,25 +255,30 @@ export async function getBalanceSummary(
     })
     .from(transactions);
 
-  return summary ?? {
-    incomeInCents: 0,
-    expenseInCents: 0,
-    balanceInCents: 0,
-  };
+  return (
+    summary ?? {
+      incomeInCents: 0,
+      expenseInCents: 0,
+      balanceInCents: 0,
+    }
+  );
 }
 
 export async function getCurrentAccountPixAdjustment(
   database: Database,
   referenceDate = new Date(),
 ): Promise<CurrentAccountPixAdjustment> {
-  const today = format(referenceDate, 'yyyy-MM-dd');
-  const monthStart = format(startOfMonth(referenceDate), 'yyyy-MM-dd');
+  const today = format(referenceDate, "yyyy-MM-dd");
+  const monthStart = format(startOfMonth(referenceDate), "yyyy-MM-dd");
   const pixTransactions = await database
-    .select({ type: transactions.type, amountInCents: transactions.amountInCents })
+    .select({
+      type: transactions.type,
+      amountInCents: transactions.amountInCents,
+    })
     .from(transactions)
     .where(
       and(
-        eq(transactions.paymentMethod, 'pix'),
+        eq(transactions.paymentMethod, "pix"),
         gte(transactions.transactionDate, monthStart),
         lte(transactions.transactionDate, today),
       ),
@@ -229,7 +286,7 @@ export async function getCurrentAccountPixAdjustment(
 
   return pixTransactions.reduce<CurrentAccountPixAdjustment>(
     (adjustment, transaction) => {
-      if (transaction.type === 'income') {
+      if (transaction.type === "income") {
         adjustment.incomeInCents += transaction.amountInCents;
         adjustment.balanceInCents += transaction.amountInCents;
       } else {
@@ -268,4 +325,64 @@ export async function getMonthlyBalanceHistory(
     .where(filters.length > 0 ? and(...filters) : undefined)
     .groupBy(period)
     .orderBy(period);
+}
+
+export async function getExpenseTotalsByCategory(
+  database: Database,
+  options: ExpenseTotalsOptions = {},
+): Promise<ExpenseTotalByCategory[]> {
+  const filters = [
+    eq(transactions.type, "expense"),
+    options.startDate
+      ? gte(transactions.transactionDate, options.startDate)
+      : undefined,
+    options.endDate
+      ? lte(transactions.transactionDate, options.endDate)
+      : undefined,
+  ].filter((filter) => filter !== undefined);
+
+  return database
+    .select({
+      category: transactions.category,
+      amountInCents: expenseCategoryTotal,
+    })
+    .from(transactions)
+    .where(and(...filters))
+    .groupBy(transactions.category)
+    .orderBy(desc(expenseCategoryTotal));
+}
+
+export async function getExpenseTotalsByCard(
+  database: Database,
+  options: ExpenseTotalsOptions = {},
+): Promise<ExpenseTotalByCard[]> {
+  const dateFilters = [
+    options.startDate
+      ? gte(transactions.transactionDate, options.startDate)
+      : undefined,
+    options.endDate
+      ? lte(transactions.transactionDate, options.endDate)
+      : undefined,
+  ].filter((filter) => filter !== undefined);
+
+  return database
+    .select({
+      cardId: cards.id,
+      cardName: cards.name,
+      cardBrand: cards.brand,
+      amountInCents: expenseCardTotal,
+      transactionCount: count(transactions.id),
+    })
+    .from(cards)
+    .leftJoin(
+      transactions,
+      and(
+        eq(transactions.cardId, cardIdAsText),
+        eq(transactions.type, "expense"),
+        eq(transactions.paymentMethod, "card"),
+        ...dateFilters,
+      ),
+    )
+    .groupBy(cards.id, cards.name, cards.brand)
+    .orderBy(desc(expenseCardTotal), cards.name);
 }

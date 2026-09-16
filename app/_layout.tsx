@@ -1,9 +1,9 @@
 import { useFonts } from "expo-font";
 import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider as NavigationThemeProvider,
-  Stack,
+    DarkTheme,
+    DefaultTheme,
+    ThemeProvider as NavigationThemeProvider,
+    Stack,
 } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
@@ -11,13 +11,14 @@ import { useEffect } from "react";
 import "react-native-reanimated";
 
 import { InitialBalanceOnboarding } from "@/src/components/onboarding/InitialBalanceOnboarding";
+import { SnackbarProvider } from "@/src/components/ui/Snackbar";
 import { ThemeToggle } from "@/src/components/ui/ThemeToggle";
 import { DatabaseProvider } from "@/src/db/provider";
 import { AppThemeProvider, useAppTheme } from "@/src/theme/theme";
 
 export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary
+    // Catch any errors thrown by the Layout component.
+    ErrorBoundary
 } from "expo-router";
 
 export const unstable_settings = {
@@ -50,9 +51,11 @@ export default function RootLayout() {
 
   return (
     <AppThemeProvider>
-      <DatabaseProvider>
-        <RootLayoutNav />
-      </DatabaseProvider>
+      <SnackbarProvider>
+        <DatabaseProvider>
+          <RootLayoutNav />
+        </DatabaseProvider>
+      </SnackbarProvider>
     </AppThemeProvider>
   );
 }

@@ -1,40 +1,40 @@
 import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import {
+    Alert,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { useSnackbar } from "@/src/components/ui/Snackbar";
 import { ThemeToggle } from "@/src/components/ui/ThemeToggle";
 import { useDatabase } from "@/src/db/provider";
-import { clearAllTransactions } from "@/src/db/queries/transactions";
+import { clearAllData } from "@/src/db/queries/transactions";
 import { useAppTheme } from "@/src/theme/theme";
 
 export default function SettingsHomeScreen() {
   const database = useDatabase();
   const { colors } = useAppTheme();
+  const { showSuccess } = useSnackbar();
+  const [confirmation, setConfirmation] = useState("");
 
-  const handleClearAllTransactions = () => {
-    Alert.alert(
-      "Limpar todos os lançamentos?",
-      "Isso apagará receitas, despesas, parcelas e regras recorrentes. Cartões e categorias serão preservados.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Apagar tudo",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await clearAllTransactions(database);
-              Alert.alert(
-                "Lançamentos apagados",
-                "Todos os lançamentos e recorrências foram removidos.",
-              );
-            } catch {
-              Alert.alert("Não foi possível limpar", "Tente novamente.");
-            }
-          },
-        },
-      ],
-    );
+  const handleClearAllData = async () => {
+    if (confirmation !== "TENHO CERTEZA") {
+      return;
+    }
+
+    try {
+      await clearAllData(database);
+      setConfirmation("");
+      showSuccess("Todos os dados foram apagados com sucesso");
+    } catch {
+      Alert.alert("Não foi possível limpar", "Tente novamente.");
+    }
   };
 
   return (
@@ -138,19 +138,38 @@ export default function SettingsHomeScreen() {
             Dados de lançamentos
           </Text>
           <Text style={[styles.dangerDescription, { color: colors.textMuted }]}>
-            Apague receitas, despesas, parcelas e recorrências de uma vez.
+            Apague lançamentos, cartões, categorias e recorrências de uma vez.
           </Text>
+          <TextInput
+            autoCapitalize="characters"
+            onChangeText={setConfirmation}
+            placeholder='Digite "TENHO CERTEZA"'
+            placeholderTextColor={colors.textMuted}
+            style={[
+              styles.confirmationInput,
+              {
+                backgroundColor: colors.background,
+                borderColor: colors.border,
+                color: colors.text,
+              },
+            ]}
+            value={confirmation}
+          />
           <Pressable
-            accessibilityRole="button"
-            onPress={handleClearAllTransactions}
+            accessibilityState={{ disabled: confirmation !== "TENHO CERTEZA" }}
+            disabled={confirmation !== "TENHO CERTEZA"}
+            onPress={() => void handleClearAllData()}
             style={({ pressed }) => [
               styles.dangerButton,
-              { borderColor: colors.expense },
+              {
+                borderColor: colors.expense,
+                opacity: confirmation === "TENHO CERTEZA" ? 1 : 0.45,
+              },
               pressed && styles.pressed,
             ]}
           >
             <Text style={[styles.dangerButtonText, { color: colors.expense }]}>
-              Limpar todos os lançamentos
+              Limpar tudo
             </Text>
           </Pressable>
         </View>
@@ -200,6 +219,14 @@ const styles = StyleSheet.create({
   },
   dangerTitle: { fontSize: 14, fontWeight: "700" },
   dangerDescription: { fontSize: 11, lineHeight: 17, marginTop: 5 },
+  confirmationInput: {
+    borderRadius: 6,
+    borderWidth: 1,
+    fontSize: 14,
+    height: 48,
+    marginTop: 14,
+    paddingHorizontal: 12,
+  },
   dangerButton: {
     alignItems: "center",
     borderRadius: 6,

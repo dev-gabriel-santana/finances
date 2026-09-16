@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -18,6 +18,7 @@ import { useAppTheme } from "@/src/theme/theme";
 
 export default function CardsScreen() {
   const { colors } = useAppTheme();
+  const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
   const {
     brand,
     closingDay,
@@ -29,16 +30,35 @@ export default function CardsScreen() {
     setName,
   } = useCreateCard();
 
+  const handleSubmit = async () => {
+    const createdCard = await handleAdd();
+
+    if (!createdCard || !returnTo) {
+      return;
+    }
+
+    router.dismissTo({
+      pathname:
+        returnTo === "income"
+          ? "/transactions/income"
+          : "/transactions/expense",
+      params: {
+        createdCardId: String(createdCard.id),
+      },
+    });
+  };
+
   return (
     <SafeAreaView
       edges={["top"]}
       style={[styles.safeArea, { backgroundColor: colors.background }]}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.flex}
       >
         <ScrollView
+          automaticallyAdjustKeyboardInsets
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -96,7 +116,7 @@ export default function CardsScreen() {
             />
             <Pressable
               disabled={isSaving}
-              onPress={() => void handleAdd()}
+              onPress={() => void handleSubmit()}
               style={({ pressed }) => [
                 styles.submitButton,
                 { backgroundColor: colors.primaryStrong },

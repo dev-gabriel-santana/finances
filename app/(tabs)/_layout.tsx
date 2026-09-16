@@ -80,6 +80,23 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="spending"
+        options={{
+          title: "Gastos",
+          tabBarIcon: ({ color }) => (
+            <SymbolView
+              name={{
+                ios: "chart.pie.fill",
+                android: "pie_chart",
+                web: "pie_chart",
+              }}
+              tintColor={color}
+              size={24}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
           title: "Cadastros",

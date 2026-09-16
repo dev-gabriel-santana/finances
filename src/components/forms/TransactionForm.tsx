@@ -1,39 +1,41 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format, parseISO } from "date-fns";
-import { router } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useRef } from "react";
 import { Controller, useForm } from "react-hook-form";
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { useSnackbar } from "@/src/components/ui/Snackbar";
 import {
-  paymentMethods,
-  paymentModalities,
+    paymentMethods,
+    paymentModalities,
 } from "@/src/constants/transactions";
 import {
-  createInstallments,
-  createRecurringTransaction,
+    createInstallments,
+    createRecurringTransaction,
 } from "@/src/db/automation";
 import { useDatabase } from "@/src/db/provider";
 import {
-  insertTransaction,
-  updateTransaction,
+    insertTransaction,
+    updateTransaction,
 } from "@/src/db/queries/transactions";
 import type { Transaction, TransactionType } from "@/src/db/schema";
 import { useTransactionFormOptions } from "@/src/hooks/useTransactionFormOptions";
 import {
-  transactionFormSchema,
-  type TransactionFormValues,
+    transactionFormSchema,
+    type TransactionFormValues,
 } from "@/src/schemas/transaction-form";
 import { useAppTheme } from "@/src/theme/theme";
 import { formatCurrency } from "@/src/utils/currency";
@@ -51,6 +53,17 @@ interface TransactionFormProps {
 export function TransactionForm({ type, transaction }: TransactionFormProps) {
   const database = useDatabase();
   const { colors } = useAppTheme();
+  const params = useLocalSearchParams<{
+    createdCategory?: string;
+    createdCardId?: string;
+  }>();
+  const createdCategory =
+    typeof params.createdCategory === "string"
+      ? params.createdCategory
+      : undefined;
+  const createdCardId =
+    typeof params.createdCardId === "string" ? params.createdCardId : undefined;
+  const { showSuccess } = useSnackbar();
   const {
     cards: availableCards,
     categories: availableCategories,
@@ -88,6 +101,32 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
     },
   });
 
+  const appliedCreatedCategory = useRef<string | undefined>(undefined);
+  const appliedCreatedCardId = useRef<string | undefined>(undefined);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (
+        createdCategory &&
+        appliedCreatedCategory.current !== createdCategory
+      ) {
+        setValue("category", createdCategory);
+        appliedCreatedCategory.current = createdCategory;
+      }
+
+      if (createdCardId && appliedCreatedCardId.current !== createdCardId) {
+        setValue("cardId", createdCardId);
+        appliedCreatedCardId.current = createdCardId;
+      }
+
+      if (createdCategory || createdCardId) {
+        router.setParams({
+          createdCategory: undefined,
+          createdCardId: undefined,
+        });
+      }
+    }, [createdCardId, createdCategory, setValue]),
+  );
   const paymentMethod = watch("paymentMethod");
   const paymentModality = watch("paymentModality");
   const isRecurring = watch("isRecurring");
@@ -157,6 +196,13 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
           },
         ],
       );
+      showSuccess(
+        isEditing
+          ? "Lançamento atualizado com sucesso"
+          : isExpense
+            ? "Despesa registrada com sucesso"
+            : "Receita registrada com sucesso",
+      );
     } catch {
       Alert.alert(
         "Não foi possível salvar",
@@ -171,10 +217,11 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
       style={[styles.safeArea, { backgroundColor: colors.background }]}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
         <ScrollView
+          automaticallyAdjustKeyboardInsets
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -260,8 +307,16 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
               render={({ field }) => (
                 <SelectField
                   error={errors.category?.message}
+                  emptyActionLabel="Cadastrar categoria"
+                  emptyMessage="É necessário cadastrar uma categoria antes de criar o lançamento."
                   label="Categoria"
                   onChange={field.onChange}
+                  onEmptyAction={() =>
+                    router.push({
+                      pathname: "/(tabs)/settings/categories",
+                      params: { returnTo: type },
+                    })
+                  }
                   options={categoryOptions}
                   placeholder={
                     isLoadingOptions
@@ -342,10 +397,18 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
                       name="cardId"
                       render={({ field }) => (
                         <SelectField
+                          emptyActionLabel="Cadastrar cartão"
+                          emptyMessage="É necessário cadastrar um cartão antes de usar esta forma de pagamento."
                           error={errors.cardId?.message}
                           label="Cartão utilizado"
                           onChange={(value) =>
                             field.onChange(value || undefined)
+                          }
+                          onEmptyAction={() =>
+                            router.push({
+                              pathname: "/(tabs)/settings/cards",
+                              params: { returnTo: type },
+                            })
                           }
                           options={cardOptions}
                           placeholder={
