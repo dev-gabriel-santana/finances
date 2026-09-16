@@ -1,246 +1,72 @@
-import { addMonths, endOfYear, format, getMonth, parseISO, startOfMonth } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { router, useFocusEffect } from 'expo-router';
-import Storage from 'expo-sqlite/kv-store';
-import { useCallback, useState } from 'react';
+import { addMonths, endOfYear, format, parseISO, startOfMonth } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import {
   ActivityIndicator,
   Pressable,
   SectionList,
   StyleSheet,
   Text,
-  TextInput,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { BarChart, type barDataItem } from 'react-native-gifted-charts';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { ThemeToggle } from '@/src/components/ui/ThemeToggle';
-import { CURRENT_BALANCE_STORAGE_KEY } from '@/src/constants/storageKeys';
-import {
-  getFutureProjections,
-  type FutureProjection,
-  type FutureProjectionMonth,
-} from '@/src/db/projections';
-import { getCurrentAccountPixAdjustment } from '@/src/db/queries/transactions';
-import { useDatabase } from '@/src/db/provider';
-import { useAppTheme } from '@/src/theme/theme';
-import { formatCurrency } from '@/src/utils/currency';
-import { formatTransactionDate } from '@/src/utils/dates';
-
-function normalizeCurrencyInput(text: string): string {
-  return text.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
-}
+import { ProjectionRow } from "@/src/components/projections/ProjectionRow";
+import { ProjectionSummary } from "@/src/components/projections/ProjectionSummary";
+import { ThemeToggle } from "@/src/components/ui/ThemeToggle";
+import { emptyProjection, useProjections } from "@/src/hooks/useProjections";
+import { useAppTheme } from "@/src/theme/theme";
+import { formatCurrency } from "@/src/utils/currency";
 
 function formatPeriod(period: string): string {
-  const formatted = format(parseISO(`${period}-01`), 'MMMM yyyy', { locale: ptBR });
+  const formatted = format(parseISO(`${period}-01`), "MMMM yyyy", {
+    locale: ptBR,
+  });
   return formatted.charAt(0).toUpperCase() + formatted.slice(1);
 }
 
 export default function ProjectionsScreen() {
-  const database = useDatabase();
   const { colors } = useAppTheme();
-  const [months, setMonths] = useState<FutureProjectionMonth[]>([]);
-  const [currentBalanceBaseInCents, setCurrentBalanceBaseInCents] = useState(0);
-  const [currentBalanceInCents, setCurrentBalanceInCents] = useState(0);
-  const [currentPixAdjustmentInCents, setCurrentPixAdjustmentInCents] = useState(0);
-  const [currentBalanceInput, setCurrentBalanceInput] = useState('');
-  const [isEditingCurrentBalance, setIsEditingCurrentBalance] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-  const currentDate = new Date();
-  const firstMonth = startOfMonth(currentDate);
+  const {
+    currentBalanceInCents,
+    currentBalanceInput,
+    currentDate,
+    currentPixAdjustmentInCents,
+    error,
+    firstMonth,
+    handleCancelCurrentBalanceEdit,
+    handleSaveCurrentBalance,
+    isEditingCurrentBalance,
+    isLoading,
+    months,
+    selectedMonth,
+    selectedPeriod,
+    setCurrentBalanceInput,
+    setIsEditingCurrentBalance,
+    setSelectedMonth,
+  } = useProjections();
   const lastMonth = startOfMonth(endOfYear(currentDate));
-  const [selectedMonth, setSelectedMonth] = useState(firstMonth);
-  const selectedPeriod = format(selectedMonth, 'yyyy-MM');
-  const isFirstMonth = selectedPeriod === format(firstMonth, 'yyyy-MM');
-  const isLastMonth = selectedPeriod === format(lastMonth, 'yyyy-MM');
-
-  useFocusEffect(
-    useCallback(() => {
-      let isActive = true;
-
-      async function loadProjections() {
-        setIsLoading(true);
-
-        try {
-          const [result, storedCurrentBalance, pixAdjustment] = await Promise.all([
-            getFutureProjections(database, 1, currentDate, selectedMonth),
-            Storage.getItem(CURRENT_BALANCE_STORAGE_KEY),
-            getCurrentAccountPixAdjustment(database, currentDate),
-          ]);
-
-          if (isActive) {
-            setMonths(result);
-            const parsedCurrentBalance = Number(storedCurrentBalance ?? '0');
-
-            if (Number.isFinite(parsedCurrentBalance) && parsedCurrentBalance >= 0) {
-              setCurrentBalanceBaseInCents(parsedCurrentBalance);
-              setCurrentBalanceInCents(parsedCurrentBalance + pixAdjustment.balanceInCents);
-              setCurrentBalanceInput(String(parsedCurrentBalance));
-              setCurrentPixAdjustmentInCents(pixAdjustment.balanceInCents);
-            } else {
-              setCurrentBalanceBaseInCents(0);
-              setCurrentBalanceInCents(0);
-              setCurrentBalanceInput('');
-              setCurrentPixAdjustmentInCents(0);
-            }
-            setError(null);
-          }
-        } catch (cause) {
-          if (isActive) {
-            setError(
-              cause instanceof Error
-                ? cause
-                : new Error('Falha ao carregar projeções'),
-            );
-          }
-        } finally {
-          if (isActive) {
-            setIsLoading(false);
-          }
-        }
-      }
-
-      void loadProjections();
-
-      return () => {
-        isActive = false;
-      };
-    }, [database, selectedPeriod, selectedMonth]),
-  );
-
-  const handleSaveCurrentBalance = async () => {
-    const nextBalanceInCents = Number(currentBalanceInput || 0);
-
-    if (!Number.isFinite(nextBalanceInCents) || nextBalanceInCents < 0) {
-      return;
-    }
-
-    setCurrentBalanceInCents(nextBalanceInCents + currentPixAdjustmentInCents);
-    setCurrentBalanceBaseInCents(nextBalanceInCents);
-    setIsEditingCurrentBalance(false);
-
-    try {
-      await Storage.setItem(
-        CURRENT_BALANCE_STORAGE_KEY,
-        String(nextBalanceInCents),
-      );
-    } catch {
-      // Keep local state even when persistence fails.
-    }
-  };
-
-  const handleCancelCurrentBalanceEdit = () => {
-    setCurrentBalanceInput(String(currentBalanceBaseInCents));
-    setIsEditingCurrentBalance(false);
-  };
+  const isFirstMonth = selectedPeriod === format(firstMonth, "yyyy-MM");
+  const isLastMonth = selectedPeriod === format(lastMonth, "yyyy-MM");
 
   const selectedProjection = months[0];
-  const totals = selectedProjection ?? {
-    incomeInCents: 0,
-    expenseInCents: 0,
-    balanceInCents: 0,
-    items: [],
-    period: selectedPeriod,
-  };
-  const isSelectedCurrentMonth = selectedPeriod === format(currentDate, 'yyyy-MM');
-  const futureBalanceAfterBillsInCents =
-    currentBalanceInCents +
-    totals.balanceInCents -
-    (isSelectedCurrentMonth ? currentPixAdjustmentInCents : 0);
-  const chartData: barDataItem[] = [
-    {
-      value: totals.incomeInCents / 100,
-      label: 'Receitas',
-      frontColor: colors.income,
-      topLabelComponent: () => (
-        <Text style={[styles.chartValue, { color: colors.income }]}>
-          {formatCurrency(totals.incomeInCents)}
-        </Text>
-      ),
-    },
-    {
-      value: totals.expenseInCents / 100,
-      label: 'Despesas',
-      frontColor: colors.expense,
-      topLabelComponent: () => (
-        <Text style={[styles.chartValue, { color: colors.expense }]}>
-          {formatCurrency(totals.expenseInCents)}
-        </Text>
-      ),
-    },
-  ];
-
-  const renderProjection = ({ item }: { item: FutureProjection }) => {
-    const isIncome = item.type === 'income';
-    const detail = item.installmentCount
-      ? `Parcela ${item.installmentNumber}/${item.installmentCount}`
-      : item.isRecurring
-        ? 'Recorrente prevista'
-        : item.category;
-
-    return (
-      <Pressable
-        disabled={!item.transactionId}
-        onPress={() =>
-          item.transactionId
-            ? router.push({
-                pathname: '/transactions/[id]',
-                params: { id: String(item.transactionId) },
-              })
-            : undefined
-        }
-        style={({ pressed }) => [
-          styles.row,
-          { backgroundColor: colors.surface, borderBottomColor: colors.border },
-          pressed && item.transactionId !== null && styles.pressed,
-        ]}>
-        <View
-          style={[
-            styles.marker,
-            {
-              backgroundColor: isIncome
-                ? colors.incomeSurface
-                : colors.expenseSurface,
-            },
-          ]}>
-          <Text style={[styles.markerText, { color: isIncome ? colors.income : colors.expense }]}>
-            {item.isRecurring ? '↻' : item.installmentCount ? '#' : isIncome ? '+' : '−'}
-          </Text>
-        </View>
-
-        <View style={styles.rowContent}>
-          <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text }]}>
-            {item.title}
-          </Text>
-          <Text numberOfLines={1} style={[styles.rowMeta, { color: colors.textMuted }]}>
-            {detail} · {formatTransactionDate(item.transactionDate)}
-          </Text>
-        </View>
-
-        <Text
-          adjustsFontSizeToFit
-          numberOfLines={1}
-          style={[
-            styles.rowAmount,
-            { color: isIncome ? colors.income : colors.expense },
-          ]}>
-          {isIncome ? '+' : '-'} {formatCurrency(item.amountInCents)}
-        </Text>
-      </Pressable>
-    );
-  };
+  const totals = selectedProjection ?? emptyProjection(selectedPeriod);
+  const isSelectedCurrentMonth =
+    selectedPeriod === format(currentDate, "yyyy-MM");
 
   return (
     <SafeAreaView
-      edges={['top']}
-      style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      edges={["top"]}
+      style={[styles.safeArea, { backgroundColor: colors.background }]}
+    >
       <View style={[styles.header, { backgroundColor: colors.surface }]}>
         <View style={styles.headingRow}>
           <View>
-            <Text style={[styles.eyebrow, { color: colors.primary }]}>PLANEJAMENTO</Text>
-            <Text style={[styles.title, { color: colors.text }]}>Projeção mensal</Text>
+            <Text style={[styles.eyebrow, { color: colors.primary }]}>
+              PLANEJAMENTO
+            </Text>
+            <Text style={[styles.title, { color: colors.text }]}>
+              Projeção mensal
+            </Text>
           </View>
           <ThemeToggle />
         </View>
@@ -250,15 +76,27 @@ export default function ProjectionsScreen() {
             accessibilityLabel="Mês anterior"
             disabled={isFirstMonth}
             onPress={() => setSelectedMonth((month) => addMonths(month, -1))}
-            style={({ pressed }) => [styles.monthButton, isFirstMonth && styles.disabled, pressed && styles.pressed]}>
+            style={({ pressed }) => [
+              styles.monthButton,
+              isFirstMonth && styles.disabled,
+              pressed && styles.pressed,
+            ]}
+          >
             <Text style={[styles.monthArrow, { color: colors.text }]}>‹</Text>
           </Pressable>
-          <Text style={[styles.yearCaption, { color: colors.text }]}>{formatPeriod(selectedPeriod)}</Text>
+          <Text style={[styles.yearCaption, { color: colors.text }]}>
+            {formatPeriod(selectedPeriod)}
+          </Text>
           <Pressable
             accessibilityLabel="Próximo mês"
             disabled={isLastMonth}
             onPress={() => setSelectedMonth((month) => addMonths(month, 1))}
-            style={({ pressed }) => [styles.monthButton, isLastMonth && styles.disabled, pressed && styles.pressed]}>
+            style={({ pressed }) => [
+              styles.monthButton,
+              isLastMonth && styles.disabled,
+              pressed && styles.pressed,
+            ]}
+          >
             <Text style={[styles.monthArrow, { color: colors.text }]}>›</Text>
           </Pressable>
         </View>
@@ -276,139 +114,60 @@ export default function ProjectionsScreen() {
         </View>
       ) : (
         <SectionList
-          contentContainerStyle={months.length === 0 ? styles.emptyContent : styles.listContent}
+          contentContainerStyle={
+            months.length === 0 ? styles.emptyContent : styles.listContent
+          }
           keyExtractor={(item) => item.key}
-          sections={months.map((month) => ({ ...month, title: month.period, data: month.items }))}
+          sections={months.map((month) => ({
+            ...month,
+            title: month.period,
+            data: month.items,
+          }))}
           showsVerticalScrollIndicator={false}
           stickySectionHeadersEnabled
           ListHeaderComponent={
-            <View style={[styles.summary, { backgroundColor: colors.balanceSurface }]}> 
-              <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>SALDO ATUAL EM CONTA</Text>
-
-              {isEditingCurrentBalance ? (
-                <View style={styles.currentBalanceEditArea}>
-                  <TextInput
-                    keyboardType="number-pad"
-                    keyboardAppearance="default"
-                    onChangeText={(text) => setCurrentBalanceInput(normalizeCurrencyInput(text))}
-                    placeholder="R$ 0,00"
-                    placeholderTextColor={colors.textMuted}
-                    selectionColor={colors.primary}
-                    style={[
-                      styles.currentBalanceInput,
-                      {
-                        borderColor: colors.balanceBorder,
-                        color: colors.onStrong,
-                      },
-                    ]}
-                    value={
-                      Number(currentBalanceInput || 0) > 0
-                        ? formatCurrency(Number(currentBalanceInput))
-                        : ''
-                    }
-                  />
-
-                  <View style={styles.currentBalanceActions}>
-                    <Pressable
-                      onPress={handleSaveCurrentBalance}
-                      style={({ pressed }) => [
-                        styles.currentBalanceActionButton,
-                        { backgroundColor: colors.primaryStrong },
-                        pressed && styles.pressed,
-                      ]}>
-                      <Text style={[styles.currentBalanceActionText, { color: colors.onStrong }]}>Salvar</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={handleCancelCurrentBalanceEdit}
-                      style={({ pressed }) => [
-                        styles.currentBalanceActionButton,
-                        styles.currentBalanceActionSecondary,
-                        { borderColor: colors.balanceBorder },
-                        pressed && styles.pressed,
-                      ]}>
-                      <Text style={[styles.currentBalanceActionText, { color: colors.onStrong }]}>Cancelar</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              ) : (
-                <>
-                  <Text
-                    adjustsFontSizeToFit
-                    numberOfLines={1}
-                    style={[styles.summaryBalance, { color: colors.onStrong }]}> 
-                    {formatCurrency(currentBalanceInCents)}
-                  </Text>
-                  <Pressable
-                    onPress={() => setIsEditingCurrentBalance(true)}
-                    style={({ pressed }) => [styles.editCurrentBalanceButton, pressed && styles.pressed]}>
-                    <Text style={[styles.editCurrentBalanceText, { color: colors.primary }]}>Editar saldo atual</Text>
-                  </Pressable>
-                </>
-              )}
-
-              <View style={[styles.futureBalanceBlock, { borderColor: colors.balanceBorder }]}> 
-                <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>SALDO FUTURO - APOS PAGAR TUDO</Text>
-                <Text
-                  adjustsFontSizeToFit
-                  numberOfLines={1}
-                  style={[styles.futureBalanceValue, { color: colors.onStrong }]}> 
-                  {formatCurrency(futureBalanceAfterBillsInCents)}
-                </Text>
-                <Text style={[styles.futureFormula, { color: colors.textMuted }]}> 
-                  {formatCurrency(currentBalanceInCents)} + {formatCurrency(totals.incomeInCents)} - {formatCurrency(totals.expenseInCents)}
-                </Text>
-              </View>
-
-              <Text style={[styles.summaryLabel, styles.monthSummaryLabel, { color: colors.textMuted }]}>SALDO DO MÊS</Text>
-              <Text
-                adjustsFontSizeToFit
-                numberOfLines={1}
-                style={[styles.summaryBalance, { color: colors.onStrong }]}> 
-                {formatCurrency(totals.balanceInCents)}
-              </Text>
-              <View style={styles.summaryBreakdown}>
-                <Text style={[styles.summaryMetric, { color: colors.income }]}> 
-                  + {formatCurrency(totals.incomeInCents)}
-                </Text>
-                <Text style={[styles.summaryMetric, { color: colors.expense }]}> 
-                  - {formatCurrency(totals.expenseInCents)}
-                </Text>
-              </View>
-              <View style={[styles.chartContainer, { backgroundColor: colors.surface }]}> 
-                <BarChart
-                  data={chartData}
-                  barWidth={46}
-                  barBorderRadius={5}
-                  height={150}
-                  noOfSections={4}
-                  spacing={42}
-                  yAxisTextStyle={[styles.axisText, { color: colors.textMuted }]}
-                  xAxisLabelTextStyle={[styles.axisLabel, { color: colors.textMuted }]}
-                  rulesColor={colors.border}
-                  yAxisColor="transparent"
-                  xAxisColor={colors.border}
-                  formatYLabel={(value) => `R$ ${value}`}
-                />
-              </View>
-            </View>
+            <ProjectionSummary
+              currentBalanceInCents={currentBalanceInCents}
+              currentBalanceInput={currentBalanceInput}
+              currentPixAdjustmentInCents={currentPixAdjustmentInCents}
+              isEditingCurrentBalance={isEditingCurrentBalance}
+              isSelectedCurrentMonth={isSelectedCurrentMonth}
+              onCancelCurrentBalanceEdit={handleCancelCurrentBalanceEdit}
+              onChangeCurrentBalanceInput={(text) =>
+                setCurrentBalanceInput(
+                  text.replace(/\D/g, "").replace(/^0+(?=\d)/, ""),
+                )
+              }
+              onEditCurrentBalance={() => setIsEditingCurrentBalance(true)}
+              onSaveCurrentBalance={handleSaveCurrentBalance}
+              totals={totals}
+            />
           }
           ListEmptyComponent={
             <View style={[styles.empty, { borderColor: colors.border }]}>
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>Nenhum lançamento futuro</Text>
-              <Text style={[styles.emptyText, { color: colors.textMuted }]}> 
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                Nenhum lançamento futuro
+              </Text>
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
                 Nenhum lançamento previsto para este mês.
               </Text>
             </View>
           }
-          renderItem={renderProjection}
+          renderItem={({ item }) => <ProjectionRow item={item} />}
           renderSectionHeader={({ section }) => (
-            <View style={[styles.monthHeader, { backgroundColor: colors.background }]}>
+            <View
+              style={[
+                styles.monthHeader,
+                { backgroundColor: colors.background },
+              ]}
+            >
               <View>
                 <Text style={[styles.monthTitle, { color: colors.text }]}>
                   {formatPeriod(section.period)}
                 </Text>
                 <Text style={[styles.monthCount, { color: colors.textMuted }]}>
-                  {section.data.length} lançamento{section.data.length === 1 ? '' : 's'}
+                  {section.data.length} lançamento
+                  {section.data.length === 1 ? "" : "s"}
                 </Text>
               </View>
               <Text style={[styles.monthTotal, { color: colors.expense }]}>
@@ -432,35 +191,35 @@ const styles = StyleSheet.create({
     paddingTop: 18,
   },
   headingRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   eyebrow: {
-    fontFamily: 'SpaceMono',
+    fontFamily: "SpaceMono",
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 0,
   },
   title: {
     fontSize: 26,
-    fontWeight: '700',
+    fontWeight: "700",
     marginTop: 3,
   },
   yearCaption: {
     flex: 1,
     fontSize: 12,
-    textAlign: 'center',
+    textAlign: "center",
   },
   centered: {
-    alignItems: 'center',
+    alignItems: "center",
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     padding: 24,
   },
   errorText: {
     fontSize: 13,
-    textAlign: 'center',
+    textAlign: "center",
   },
   listContent: {
     paddingBottom: 28,
@@ -469,96 +228,16 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 20,
   },
-  summary: {
-    paddingHorizontal: 22,
-    paddingVertical: 24,
-  },
-  summaryLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  summaryBalance: {
-    fontFamily: 'SpaceMono',
-    fontSize: 28,
-    marginTop: 5,
-  },
-  summaryBreakdown: {
-    flexDirection: 'row',
-    gap: 20,
-    marginTop: 14,
-  },
-  monthSummaryLabel: {
-    marginTop: 16,
-  },
-  summaryMetric: {
-    fontFamily: 'SpaceMono',
-    fontSize: 11,
-  },
-  currentBalanceEditArea: {
-    marginTop: 8,
-  },
-  currentBalanceInput: {
-    borderRadius: 8,
-    borderWidth: 1,
-    fontFamily: 'SpaceMono',
-    fontSize: 22,
-    height: 56,
-    paddingHorizontal: 14,
-  },
-  currentBalanceActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 10,
-  },
-  currentBalanceActionButton: {
-    alignItems: 'center',
-    borderRadius: 6,
-    flex: 1,
-    justifyContent: 'center',
-    minHeight: 40,
-    paddingHorizontal: 10,
-  },
-  currentBalanceActionSecondary: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-  },
-  currentBalanceActionText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  editCurrentBalanceButton: {
-    alignSelf: 'flex-start',
-    marginTop: 8,
-  },
-  editCurrentBalanceText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  futureBalanceBlock: {
-    borderRadius: 8,
-    borderWidth: 1,
-    marginTop: 16,
-    padding: 12,
-  },
-  futureBalanceValue: {
-    fontFamily: 'SpaceMono',
-    fontSize: 22,
-    marginTop: 4,
-  },
-  futureFormula: {
-    fontSize: 10,
-    marginTop: 6,
-  },
   monthNavigator: {
-    alignItems: 'center',
-    flexDirection: 'row',
+    alignItems: "center",
+    flexDirection: "row",
     marginTop: 14,
   },
   monthButton: {
-    alignItems: 'center',
+    alignItems: "center",
     borderRadius: 6,
     height: 34,
-    justifyContent: 'center',
+    justifyContent: "center",
     width: 38,
   },
   monthArrow: {
@@ -568,100 +247,45 @@ const styles = StyleSheet.create({
   disabled: {
     opacity: 0.25,
   },
-  chartContainer: {
-    borderRadius: 8,
-    marginTop: 20,
-    paddingBottom: 8,
-    paddingTop: 12,
-  },
-  chartValue: {
-    fontFamily: 'SpaceMono',
-    fontSize: 9,
-    marginBottom: 4,
-  },
-  axisText: {
-    fontSize: 9,
-  },
-  axisLabel: {
-    fontSize: 10,
+  pressed: {
+    opacity: 0.65,
   },
   monthHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
     minHeight: 66,
     paddingHorizontal: 20,
     paddingVertical: 12,
   },
   monthTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   monthCount: {
     fontSize: 10,
     marginTop: 3,
   },
   monthTotal: {
-    fontFamily: 'SpaceMono',
+    fontFamily: "SpaceMono",
     fontSize: 12,
   },
-  row: {
-    alignItems: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    minHeight: 72,
-    paddingHorizontal: 20,
-  },
-  marker: {
-    alignItems: 'center',
-    borderRadius: 6,
-    height: 36,
-    justifyContent: 'center',
-    marginRight: 12,
-    width: 36,
-  },
-  markerText: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  rowContent: {
-    flex: 1,
-    marginRight: 10,
-    minWidth: 0,
-  },
-  rowTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  rowMeta: {
-    fontSize: 10,
-    marginTop: 4,
-  },
-  rowAmount: {
-    fontFamily: 'SpaceMono',
-    fontSize: 11,
-    maxWidth: '34%',
-    textAlign: 'right',
-  },
-  pressed: {
-    opacity: 0.65,
-  },
   empty: {
-    alignItems: 'center',
+    alignItems: "center",
     borderRadius: 8,
-    borderStyle: 'dashed',
+    borderStyle: "dashed",
     borderWidth: 1,
     marginTop: 24,
     padding: 30,
   },
   emptyTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: "600",
+    textAlign: "center",
   },
   emptyText: {
     fontSize: 11,
     marginTop: 6,
-    textAlign: 'center',
+    textAlign: "center",
   },
 });

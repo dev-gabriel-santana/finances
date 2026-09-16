@@ -1,0 +1,53 @@
+import { StyleSheet } from "react-native";
+
+export const styles = StyleSheet.create({
+  summary: { paddingHorizontal: 22, paddingVertical: 24 },
+  summaryLabel: { fontSize: 10, fontWeight: "700" },
+  summaryBalance: { fontFamily: "SpaceMono", fontSize: 28, marginTop: 5 },
+  summaryBreakdown: { flexDirection: "row", gap: 20, marginTop: 14 },
+  monthSummaryLabel: { marginTop: 16 },
+  summaryMetric: { fontFamily: "SpaceMono", fontSize: 11 },
+  currentBalanceEditArea: { marginTop: 8 },
+  currentBalanceInput: {
+    borderRadius: 8,
+    borderWidth: 1,
+    fontFamily: "SpaceMono",
+    fontSize: 22,
+    height: 56,
+    paddingHorizontal: 14,
+  },
+  currentBalanceActions: { flexDirection: "row", gap: 8, marginTop: 10 },
+  currentBalanceActionButton: {
+    alignItems: "center",
+    borderRadius: 6,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 40,
+    paddingHorizontal: 10,
+  },
+  currentBalanceActionSecondary: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+  },
+  currentBalanceActionText: { fontSize: 12, fontWeight: "700" },
+  editCurrentBalanceButton: { alignSelf: "flex-start", marginTop: 8 },
+  editCurrentBalanceText: { fontSize: 12, fontWeight: "600" },
+  futureBalanceBlock: {
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 16,
+    padding: 12,
+  },
+  futureBalanceValue: { fontFamily: "SpaceMono", fontSize: 22, marginTop: 4 },
+  futureFormula: { fontSize: 10, marginTop: 6 },
+  chartContainer: {
+    borderRadius: 8,
+    marginTop: 20,
+    paddingBottom: 8,
+    paddingTop: 12,
+  },
+  chartValue: { fontFamily: "SpaceMono", fontSize: 9, marginBottom: 4 },
+  axisText: { fontSize: 9 },
+  axisLabel: { fontSize: 10 },
+  pressed: { opacity: 0.65 },
+});

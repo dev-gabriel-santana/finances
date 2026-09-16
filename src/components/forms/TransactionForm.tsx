@@ -1,8 +1,7 @@
-import { zodResolver } from '@hookform/resolvers/zod';
-import { format, parseISO } from 'date-fns';
-import { router, useFocusEffect } from 'expo-router';
-import { Controller, useForm } from 'react-hook-form';
-import { useCallback, useState } from 'react';
+import { zodResolver } from "@hookform/resolvers/zod";
+import { format, parseISO } from "date-fns";
+import { router } from "expo-router";
+import { Controller, useForm } from "react-hook-form";
 import {
   ActivityIndicator,
   Alert,
@@ -14,38 +13,35 @@ import {
   Switch,
   Text,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
   paymentMethods,
   paymentModalities,
-} from '@/src/constants/transactions';
+} from "@/src/constants/transactions";
 import {
   createInstallments,
   createRecurringTransaction,
-} from '@/src/db/automation';
-import {
-  listCards,
-  listCategories,
-} from '@/src/db/queries/cards-categories';
+} from "@/src/db/automation";
+import { useDatabase } from "@/src/db/provider";
 import {
   insertTransaction,
   updateTransaction,
-} from '@/src/db/queries/transactions';
-import { useDatabase } from '@/src/db/provider';
-import type { Card, Category, Transaction, TransactionType } from '@/src/db/schema';
+} from "@/src/db/queries/transactions";
+import type { Transaction, TransactionType } from "@/src/db/schema";
+import { useTransactionFormOptions } from "@/src/hooks/useTransactionFormOptions";
 import {
   transactionFormSchema,
   type TransactionFormValues,
-} from '@/src/schemas/transaction-form';
-import { useAppTheme } from '@/src/theme/theme';
-import { formatCurrency } from '@/src/utils/currency';
+} from "@/src/schemas/transaction-form";
+import { useAppTheme } from "@/src/theme/theme";
+import { formatCurrency } from "@/src/utils/currency";
 
-import { CurrencyInput } from './CurrencyInput';
-import { DateField } from './DateField';
-import { SelectField } from './SelectField';
-import { TextField } from './TextField';
+import { CurrencyInput } from "./CurrencyInput";
+import { DateField } from "./DateField";
+import { SelectField } from "./SelectField";
+import { TextField } from "./TextField";
 
 interface TransactionFormProps {
   type: TransactionType;
@@ -55,7 +51,13 @@ interface TransactionFormProps {
 export function TransactionForm({ type, transaction }: TransactionFormProps) {
   const database = useDatabase();
   const { colors } = useAppTheme();
-  const isExpense = type === 'expense';
+  const {
+    cards: availableCards,
+    categories: availableCategories,
+    isLoading: isLoadingOptions,
+    hasError: optionsError,
+  } = useTransactionFormOptions();
+  const isExpense = type === "expense";
   const isEditing = Boolean(transaction);
   const {
     control,
@@ -67,14 +69,14 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
     resolver: zodResolver(transactionFormSchema),
     defaultValues: {
       type,
-      title: transaction?.title ?? '',
-      description: transaction?.description ?? '',
-      amount: transaction ? String(transaction.amountInCents) : '',
-      category: transaction?.category ?? '',
+      title: transaction?.title ?? "",
+      description: transaction?.description ?? "",
+      amount: transaction ? String(transaction.amountInCents) : "",
+      category: transaction?.category ?? "",
       transactionDate: transaction
         ? parseISO(transaction.transactionDate)
         : new Date(),
-      merchant: transaction?.merchant ?? '',
+      merchant: transaction?.merchant ?? "",
       paymentMethod: transaction?.paymentMethod ?? undefined,
       cardId: transaction?.cardId ?? undefined,
       paymentModality: transaction?.paymentModality ?? undefined,
@@ -82,48 +84,19 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
         ? parseISO(transaction.invoiceDueDate)
         : undefined,
       isRecurring: false,
-      installmentCount: '1',
+      installmentCount: "1",
     },
   });
 
-  const paymentMethod = watch('paymentMethod');
-  const paymentModality = watch('paymentModality');
-  const isRecurring = watch('isRecurring');
-  const installmentCount = watch('installmentCount');
-  const amount = watch('amount');
-  const usesCard = isExpense && paymentMethod === 'card';
-  const usesCredit = usesCard && paymentModality === 'credit';
+  const paymentMethod = watch("paymentMethod");
+  const paymentModality = watch("paymentModality");
+  const isRecurring = watch("isRecurring");
+  const installmentCount = watch("installmentCount");
+  const amount = watch("amount");
+  const usesCard = isExpense && paymentMethod === "card";
+  const usesCredit = usesCard && paymentModality === "credit";
   const installments = Number(installmentCount) || 1;
   const installmentPreview = Math.floor(Number(amount || 0) / installments);
-  const [availableCards, setAvailableCards] = useState<Card[]>([]);
-  const [availableCategories, setAvailableCategories] = useState<Category[]>([]);
-  const [isLoadingOptions, setIsLoadingOptions] = useState(true);
-  const [optionsError, setOptionsError] = useState(false);
-
-  const loadOptions = useCallback(async () => {
-    setIsLoadingOptions(true);
-
-    try {
-      const [cardRows, categoryRows] = await Promise.all([
-        listCards(database),
-        listCategories(database),
-      ]);
-      setAvailableCards(cardRows);
-      setAvailableCategories(categoryRows);
-      setOptionsError(false);
-    } catch {
-      setOptionsError(true);
-    } finally {
-      setIsLoadingOptions(false);
-    }
-  }, [database]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void loadOptions();
-    }, [loadOptions]),
-  );
-
   const categoryOptions = availableCategories.map((category) => ({
     label: category.name,
     value: category.name,
@@ -141,14 +114,14 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
         description: values.description || null,
         amountInCents: Number(values.amount),
         category: values.category,
-        transactionDate: format(values.transactionDate, 'yyyy-MM-dd'),
+        transactionDate: format(values.transactionDate, "yyyy-MM-dd"),
         merchant: isExpense ? values.merchant || null : null,
-        paymentMethod: isExpense ? values.paymentMethod ?? null : null,
-        cardId: usesCard ? values.cardId ?? null : null,
-        paymentModality: usesCard ? values.paymentModality ?? null : null,
+        paymentMethod: isExpense ? (values.paymentMethod ?? null) : null,
+        cardId: usesCard ? (values.cardId ?? null) : null,
+        paymentModality: usesCard ? (values.paymentModality ?? null) : null,
         invoiceDueDate:
           usesCredit && values.invoiceDueDate
-            ? format(values.invoiceDueDate, 'yyyy-MM-dd')
+            ? format(values.invoiceDueDate, "yyyy-MM-dd")
             : null,
       };
 
@@ -160,61 +133,74 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
             ? await createInstallments(database, {
                 ...input,
                 installmentCount: Number(values.installmentCount),
-                invoiceDueDate: format(values.invoiceDueDate, 'yyyy-MM-dd'),
+                invoiceDueDate: format(values.invoiceDueDate, "yyyy-MM-dd"),
               })
             : await insertTransaction(database, input);
 
       Alert.alert(
         isEditing
-          ? 'Lançamento atualizado'
+          ? "Lançamento atualizado"
           : isExpense
-            ? 'Despesa registrada'
-            : 'Receita registrada',
+            ? "Despesa registrada"
+            : "Receita registrada",
         isEditing
-          ? 'As alterações foram salvas no dispositivo.'
-          : 'O lançamento foi salvo no dispositivo.',
+          ? "As alterações foram salvas no dispositivo."
+          : "O lançamento foi salvo no dispositivo.",
         [
           {
-            text: 'Concluir',
+            text: "Concluir",
             onPress: () =>
               router.replace({
-                pathname: '/transactions/[id]',
+                pathname: "/transactions/[id]",
                 params: { id: String(savedTransaction.id) },
               }),
           },
         ],
       );
     } catch {
-      Alert.alert('Não foi possível salvar', 'Revise os dados e tente novamente.');
+      Alert.alert(
+        "Não foi possível salvar",
+        "Revise os dados e tente novamente.",
+      );
     }
   };
 
   return (
-    <SafeAreaView edges={['bottom']} style={[styles.safeArea, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      edges={["bottom"]}
+      style={[styles.safeArea, { backgroundColor: colors.background }]}
+    >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.keyboardView}>
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.keyboardView}
+      >
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+        >
           <View style={[styles.intro, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.typeMarker, { color: isExpense ? colors.expense : colors.income }]}>
-              {isExpense ? 'SAÍDA' : 'ENTRADA'}
+            <Text
+              style={[
+                styles.typeMarker,
+                { color: isExpense ? colors.expense : colors.income },
+              ]}
+            >
+              {isExpense ? "SAÍDA" : "ENTRADA"}
             </Text>
             <Text style={[styles.title, { color: colors.text }]}>
               {isEditing
-                ? 'Editar lançamento'
+                ? "Editar lançamento"
                 : isExpense
-                  ? 'Nova despesa'
-                  : 'Nova receita'}
+                  ? "Nova despesa"
+                  : "Nova receita"}
             </Text>
             <Text style={[styles.subtitle, { color: colors.textMuted }]}>
               {isEditing
-                ? 'Atualize os dados que deseja alterar.'
+                ? "Atualize os dados que deseja alterar."
                 : isExpense
-                ? 'Registre os detalhes da compra ou pagamento.'
-                : 'Registre o dinheiro recebido.'}
+                  ? "Registre os detalhes da compra ou pagamento."
+                  : "Registre o dinheiro recebido."}
             </Text>
           </View>
 
@@ -229,7 +215,9 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
                   label="Título"
                   onBlur={field.onBlur}
                   onChangeText={field.onChange}
-                  placeholder={isExpense ? 'Ex: Mercado da semana' : 'Ex: Salário'}
+                  placeholder={
+                    isExpense ? "Ex: Mercado da semana" : "Ex: Salário"
+                  }
                   returnKeyType="next"
                   value={field.value}
                 />
@@ -275,13 +263,17 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
                   label="Categoria"
                   onChange={field.onChange}
                   options={categoryOptions}
-                  placeholder={isLoadingOptions ? 'Carregando categorias...' : 'Selecione uma categoria'}
+                  placeholder={
+                    isLoadingOptions
+                      ? "Carregando categorias..."
+                      : "Selecione uma categoria"
+                  }
                   value={field.value}
                 />
               )}
             />
             {optionsError ? (
-              <Text style={[styles.optionsError, { color: colors.expense }]}> 
+              <Text style={[styles.optionsError, { color: colors.expense }]}>
                 Não foi possível carregar os cartões e categorias.
               </Text>
             ) : null}
@@ -301,8 +293,12 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
 
             {isExpense ? (
               <>
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>Detalhes do pagamento</Text>
+                <View
+                  style={[styles.divider, { backgroundColor: colors.border }]}
+                />
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                  Detalhes do pagamento
+                </Text>
 
                 <Controller
                   control={control}
@@ -329,8 +325,8 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
                       label="Forma de pagamento"
                       onChange={(value) => {
                         field.onChange(value || undefined);
-                        if (value !== 'card') {
-                          setValue('installmentCount', '1');
+                        if (value !== "card") {
+                          setValue("installmentCount", "1");
                         }
                       }}
                       options={paymentMethods}
@@ -348,9 +344,15 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
                         <SelectField
                           error={errors.cardId?.message}
                           label="Cartão utilizado"
-                          onChange={(value) => field.onChange(value || undefined)}
+                          onChange={(value) =>
+                            field.onChange(value || undefined)
+                          }
                           options={cardOptions}
-                          placeholder={isLoadingOptions ? 'Carregando cartões...' : 'Selecione um cartão'}
+                          placeholder={
+                            isLoadingOptions
+                              ? "Carregando cartões..."
+                              : "Selecione um cartão"
+                          }
                           value={field.value}
                         />
                       )}
@@ -365,8 +367,8 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
                           label="Modalidade"
                           onChange={(value) => {
                             field.onChange(value || undefined);
-                            if (value !== 'credit') {
-                              setValue('installmentCount', '1');
+                            if (value !== "credit") {
+                              setValue("installmentCount", "1");
                             }
                           }}
                           options={paymentModalities}
@@ -405,13 +407,19 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
                               maxLength={2}
                               onBlur={field.onBlur}
                               onChangeText={(value) =>
-                                field.onChange(value.replace(/\D/g, ''))
+                                field.onChange(value.replace(/\D/g, ""))
                               }
                               value={field.value}
                             />
                             {installments > 1 && Number(amount) > 0 ? (
-                              <Text style={[styles.installmentPreview, { color: colors.textMuted }]}>
-                                {installments} parcelas a partir de {formatCurrency(installmentPreview)}
+                              <Text
+                                style={[
+                                  styles.installmentPreview,
+                                  { color: colors.textMuted },
+                                ]}
+                              >
+                                {installments} parcelas a partir de{" "}
+                                {formatCurrency(installmentPreview)}
                               </Text>
                             ) : null}
                           </>
@@ -420,7 +428,6 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
                     ) : null}
                   </>
                 ) : null}
-
               </>
             ) : null}
 
@@ -432,13 +439,26 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
                   <View
                     style={[
                       styles.recurringRow,
-                      { backgroundColor: colors.surface, borderColor: colors.border },
-                    ]}>
+                      {
+                        backgroundColor: colors.surface,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
                     <View style={styles.recurringText}>
-                      <Text style={[styles.recurringTitle, { color: colors.text }]}> 
-                        {isExpense ? 'Despesa recorrente' : 'Receita recorrente'}
+                      <Text
+                        style={[styles.recurringTitle, { color: colors.text }]}
+                      >
+                        {isExpense
+                          ? "Despesa recorrente"
+                          : "Receita recorrente"}
                       </Text>
-                      <Text style={[styles.recurringDescription, { color: colors.textMuted }]}> 
+                      <Text
+                        style={[
+                          styles.recurringDescription,
+                          { color: colors.textMuted },
+                        ]}
+                      >
                         Repete automaticamente todos os meses
                       </Text>
                     </View>
@@ -446,10 +466,13 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
                       onValueChange={(value) => {
                         field.onChange(value);
                         if (value) {
-                          setValue('installmentCount', '1');
+                          setValue("installmentCount", "1");
                         }
                       }}
-                      trackColor={{ false: colors.border, true: colors.primary }}
+                      trackColor={{
+                        false: colors.border,
+                        true: colors.primary,
+                      }}
                       thumbColor={colors.onStrong}
                       value={field.value}
                     />
@@ -465,12 +488,13 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
                 styles.submitButton,
                 { backgroundColor: isExpense ? colors.expense : colors.income },
                 (pressed || isSubmitting) && styles.buttonPressed,
-              ]}>
+              ]}
+            >
               {isSubmitting ? (
                 <ActivityIndicator color={colors.onStrong} />
               ) : (
                 <Text style={[styles.submitText, { color: colors.onStrong }]}>
-                  {isEditing ? 'Salvar alterações' : 'Salvar lançamento'}
+                  {isEditing ? "Salvar alterações" : "Salvar lançamento"}
                 </Text>
               )}
             </Pressable>
@@ -483,7 +507,7 @@ export function TransactionForm({ type, transaction }: TransactionFormProps) {
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: '#f2f5f3',
+    backgroundColor: "#f2f5f3",
     flex: 1,
   },
   keyboardView: {
@@ -493,31 +517,31 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
   },
   intro: {
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     paddingBottom: 22,
     paddingHorizontal: 20,
     paddingTop: 18,
   },
   typeMarker: {
-    fontFamily: 'SpaceMono',
+    fontFamily: "SpaceMono",
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 0,
   },
   expense: {
-    color: '#c34231',
+    color: "#c34231",
   },
   income: {
-    color: '#087a4d',
+    color: "#087a4d",
   },
   title: {
-    color: '#17201c',
+    color: "#17201c",
     fontSize: 25,
-    fontWeight: '700',
+    fontWeight: "700",
     marginTop: 4,
   },
   subtitle: {
-    color: '#758078',
+    color: "#758078",
     fontSize: 13,
     marginTop: 5,
   },
@@ -526,23 +550,23 @@ const styles = StyleSheet.create({
     paddingTop: 22,
   },
   divider: {
-    backgroundColor: '#dce3df',
+    backgroundColor: "#dce3df",
     height: StyleSheet.hairlineWidth,
     marginBottom: 20,
     marginTop: 2,
   },
   sectionTitle: {
-    color: '#17201c',
+    color: "#17201c",
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
     marginBottom: 18,
   },
   recurringRow: {
-    alignItems: 'center',
+    alignItems: "center",
     borderRadius: 6,
     borderWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: 18,
     minHeight: 72,
     paddingHorizontal: 14,
@@ -554,7 +578,7 @@ const styles = StyleSheet.create({
   },
   recurringTitle: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   recurringDescription: {
     fontSize: 11,
@@ -571,24 +595,24 @@ const styles = StyleSheet.create({
     marginTop: -8,
   },
   submitButton: {
-    alignItems: 'center',
+    alignItems: "center",
     borderRadius: 6,
     height: 52,
-    justifyContent: 'center',
+    justifyContent: "center",
     marginTop: 8,
   },
   expenseButton: {
-    backgroundColor: '#c34231',
+    backgroundColor: "#c34231",
   },
   incomeButton: {
-    backgroundColor: '#087a4d',
+    backgroundColor: "#087a4d",
   },
   buttonPressed: {
     opacity: 0.68,
   },
   submitText: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 });
