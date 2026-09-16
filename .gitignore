@@ -48,6 +48,9 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# Play Store service account
+play-service-account.json
+
 # generated native folders
 /ios
 /android

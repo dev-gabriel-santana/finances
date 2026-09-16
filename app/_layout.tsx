@@ -19,7 +19,6 @@ import {
 } from "react-native";
 import "react-native-reanimated";
 
-import { AuthProvider } from "@/src/auth/AuthContext";
 import { ThemeToggle } from "@/src/components/ui/ThemeToggle";
 import {
   CURRENT_BALANCE_STORAGE_KEY,
@@ -64,13 +63,9 @@ export default function RootLayout() {
 
   return (
     <AppThemeProvider>
-      <AuthProvider>
-        {/* <BiometricGate> */}
-        <DatabaseProvider>
-          <RootLayoutNav />
-        </DatabaseProvider>
-        {/* </BiometricGate> */}
-      </AuthProvider>
+      <DatabaseProvider>
+        <RootLayoutNav />
+      </DatabaseProvider>
     </AppThemeProvider>
   );
 }
