@@ -160,7 +160,7 @@ export default function DashboardScreen() {
           <View style={styles.headerRow}>
             <View>
               <Text style={[styles.brand, { color: colors.primary }]}>
-                FINANÇAS
+                GFIN
               </Text>
               <Text style={[styles.heading, { color: colors.text }]}>
                 Visão geral

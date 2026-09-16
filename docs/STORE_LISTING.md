@@ -1,18 +1,18 @@
-# Ficha da Google Play — Finanças
+# Ficha da Google Play — GFin
 
 ## Nome do app (máx. 30)
 
-Finanças Offline
+GFin
 
-> Alternativas: "Finanças — Controle Offline", "Meu Controle Financeiro".
+> Se quiser algo mais descritivo para SEO na loja: "GFin — Controle Financeiro Offline".
 
 ## Descrição curta (máx. 80)
 
-Controle suas finanças pessoais 100% offline. Sem cadastro, sem coleta de dados.
+GFin: finanças pessoais 100% offline. Sem cadastro, sem coleta de dados.
 
 ## Descrição completa (máx. 4000)
 
-Finanças é um app simples e direto para quem quer entender pra onde vai o dinheiro — sem depender de banco, sem criar conta e sem enviar dados para lugar nenhum. Tudo fica salvo apenas no seu dispositivo.
+GFin é um app simples e direto para quem quer entender pra onde vai o dinheiro — sem depender de banco, sem criar conta e sem enviar dados para lugar nenhum. Tudo fica salvo apenas no seu dispositivo.
 
 **Principais recursos**
 

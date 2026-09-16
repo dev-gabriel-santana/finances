@@ -1,12 +1,12 @@
-# Política de Privacidade — Finanças
+# Política de Privacidade — GFin
 
 **Última atualização:** 16 de setembro de 2026
 
-Esta política descreve como o aplicativo **Finanças** ("app", "nós") trata as informações do usuário.
+Esta política descreve como o aplicativo **GFin** ("app", "nós") trata as informações do usuário.
 
 ## Resumo
 
-O Finanças é um aplicativo de controle financeiro pessoal **100% offline**. Todos os dados que você registra ficam armazenados apenas no seu dispositivo. **Não coletamos, transmitimos, compartilhamos ou vendemos qualquer informação pessoal.**
+O GFin é um aplicativo de controle financeiro pessoal **100% offline**. Todos os dados que você registra ficam armazenados apenas no seu dispositivo. **Não coletamos, transmitimos, compartilhamos ou vendemos qualquer informação pessoal.**
 
 ## Dados que o app manipula
 
